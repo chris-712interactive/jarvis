@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #12151c;
+  --ink-soft: #2a3140;
+  --mist: #e8eef6;
+  --paper: #f4f7fb;
+  --signal: #c45c16;
+  --signal-soft: #f3d5bc;
+  --flight: #0f766e;
+  --flight-soft: #d5efeb;
+  --line: color-mix(in oklab, var(--ink) 12%, transparent);
+  --glow-a: #9eb6d4;
+  --glow-b: #d9c4a8;
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-mist: var(--mist);
+  --color-paper: var(--paper);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-flight: var(--flight);
+  --color-flight-soft: var(--flight-soft);
+  --color-line: var(--line);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--foreground);
+  background:
+    radial-gradient(1200px 700px at 12% -10%, color-mix(in oklab, var(--glow-a) 55%, white), transparent 60%),
+    radial-gradient(900px 600px at 90% 0%, color-mix(in oklab, var(--glow-b) 45%, white), transparent 55%),
+    linear-gradient(180deg, #eef3f9 0%, var(--paper) 42%, #eef2f6 100%);
+  background-attachment: fixed;
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--signal) 28%, white);
+}
+
+.jarvis-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--ink) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--ink) 6%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 25%, transparent 75%);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-lane {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-30%);
+  }
+  to {
+    transform: translateX(130%);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-rise-delay-1 {
+  animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+.animate-rise-delay-2 {
+  animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 220ms both;
+}
+
+.animate-rise-delay-3 {
+  animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 320ms both;
+}
+
+.lane-pulse {
+  animation: pulse-lane 2.4s ease-in-out infinite;
+}
+
+.sweep-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.sweep-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--flight) 35%, transparent),
+    transparent
+  );
+  animation: sweep 2.8s ease-in-out infinite;
+}

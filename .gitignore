@@ -1,0 +1,26 @@
+# Root
+node_modules/
+.DS_Store
+*.pem
+.env*
+!.env.example
+
+# Next / build
+**/.next/
+**/out/
+**/dist/
+*.tsbuildinfo
+
+# Local databases
+**/*.db
+**/*.db-*
+**/data/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Vercel
+.vercel
