@@ -14,18 +14,41 @@ function formatRelative(date: Date) {
   return `${days}d ago`;
 }
 
-function StatusDot({ tone }: { tone: "signal" | "flight" | "muted" }) {
+function StatusChip({ tone }: { tone: "signal" | "flight" | "muted" }) {
   const color =
     tone === "signal"
       ? "bg-signal"
       : tone === "flight"
         ? "bg-flight"
-        : "bg-ink-soft/40";
+        : "bg-ink-soft/35";
   return (
     <span
-      className={`inline-block h-2 w-2 rounded-full ${color} ${tone !== "muted" ? "lane-pulse" : ""}`}
+      className={`live-dot mt-1.5 shrink-0 ${color} ${tone !== "muted" ? "lane-pulse" : ""}`}
       aria-hidden
     />
+  );
+}
+
+function SectionLabel({
+  children,
+  tone = "beam",
+}: {
+  children: React.ReactNode;
+  tone?: "beam" | "signal" | "flight";
+}) {
+  const color =
+    tone === "signal"
+      ? "text-signal"
+      : tone === "flight"
+        ? "text-flight-deep"
+        : "text-beam";
+  return (
+    <p
+      className={`font-mono text-[11px] uppercase tracking-[0.28em] ${color}`}
+    >
+      {"//"}
+      {children}
+    </p>
   );
 }
 
@@ -40,44 +63,70 @@ export function Hero({
 }) {
   const headline =
     needsCount > 0
-      ? "Something needs you."
+      ? "Hey — you've got company."
       : inFlightCount > 0
-        ? "Work is moving."
-        : "All quiet on the lanes.";
+        ? "Engines are humming."
+        : "Ready when you are.";
 
   const support =
     needsCount > 0
-      ? `${needsCount} item${needsCount === 1 ? "" : "s"} waiting for a decision. Everything else can keep running.`
+      ? `${needsCount} thing${needsCount === 1 ? "" : "s"} need a human call. Everything else can keep flying.`
       : inFlightCount > 0
-        ? `${inFlightCount} job${inFlightCount === 1 ? "" : "s"} in flight across ${projectCount} project${projectCount === 1 ? "" : "s"}.`
-        : "Add a project or queue a job — Jarvis will hold the board while you focus.";
+        ? `${inFlightCount} job${inFlightCount === 1 ? "" : "s"} spinning across ${projectCount} lane${projectCount === 1 ? "" : "s"} while you do literally anything else.`
+        : "Spin up a project lane and I’ll hold the board — coffee runs count as deep work.";
+
+  const tickerItems = [
+    `lanes:${projectCount}`,
+    `alerts:${needsCount}`,
+    `inflight:${inFlightCount}`,
+    "mode:command",
+    "voice:coming_soon",
+    "agents:standby",
+    "fun:enabled",
+  ];
 
   return (
-    <section className="relative mx-auto flex min-h-[72vh] w-full max-w-6xl flex-col justify-center px-6 pb-16 pt-20 sm:px-8 sm:pt-24">
-      <div className="pointer-events-none absolute inset-0 jarvis-grid opacity-70" />
+    <section className="relative mx-auto flex min-h-[78vh] w-full max-w-6xl flex-col justify-center px-5 pb-14 pt-16 sm:px-8 sm:pt-20">
+      <div className="orbit-ring hidden md:block" aria-hidden />
+
       <div className="relative">
-        <p className="animate-rise font-[family-name:var(--font-display)] text-5xl font-extrabold tracking-tight text-ink sm:text-7xl md:text-8xl">
+        <div className="animate-rise inline-flex items-center gap-2 border border-flight/40 bg-white/50 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.22em] text-flight-deep">
+          <span className="live-dot bg-flight" />
+          live uplink
+        </div>
+
+        <p className="animate-rise-delay-1 brand-mark mt-6 font-[family-name:var(--font-display)] text-6xl font-extrabold uppercase leading-[0.9] tracking-[0.04em] sm:text-8xl md:text-9xl">
           Jarvis
         </p>
-        <h1 className="animate-rise-delay-1 mt-6 max-w-2xl font-[family-name:var(--font-display)] text-3xl font-semibold leading-tight tracking-tight text-ink-soft sm:text-4xl md:text-5xl">
+
+        <h1 className="animate-rise-delay-2 mt-6 max-w-2xl font-[family-name:var(--font-display)] text-3xl font-bold leading-tight tracking-tight text-ink sm:text-5xl">
           {headline}
         </h1>
-        <p className="animate-rise-delay-2 mt-5 max-w-xl text-base leading-relaxed text-ink-soft/85 sm:text-lg">
+
+        <p className="animate-rise-delay-3 mt-5 max-w-xl text-base leading-relaxed text-ink-soft sm:text-lg">
           {support}
         </p>
-        <div className="animate-rise-delay-3 mt-8 flex flex-wrap gap-3">
-          <a
-            href="#needs-you"
-            className="rounded-md bg-signal px-4 py-2.5 text-sm font-semibold text-white transition-transform duration-300 hover:-translate-y-0.5"
-          >
-            Review what needs you
+
+        <div className="animate-rise-delay-4 mt-8 flex flex-wrap gap-3">
+          <a href="#needs-you" className="btn-signal">
+            Check alerts
           </a>
-          <Link
-            href="/projects/new"
-            className="rounded-md border border-line bg-white/50 px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-white"
-          >
-            Add a project
+          <Link href="/projects/new" className="btn-ghost">
+            Open a new lane
           </Link>
+        </div>
+      </div>
+
+      <div className="animate-rise-delay-4 relative mt-14 hud-frame px-4 py-3">
+        <div className="ticker font-mono text-xs uppercase tracking-[0.2em] text-ink-soft">
+          <div className="ticker-track">
+            {[...tickerItems, ...tickerItems].map((item, i) => (
+              <span key={`${item}-${i}`} className="inline-flex items-center gap-2">
+                <span className="inline-block h-1.5 w-1.5 rotate-45 bg-beam" />
+                {item}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -94,71 +143,81 @@ export function NeedsYouSection({
   const empty = projects.length === 0 && jobs.length === 0;
 
   return (
-    <section id="needs-you" className="mx-auto w-full max-w-6xl px-6 py-16 sm:px-8">
-      <div className="mb-8 flex items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-signal">
-            Needs you
-          </p>
-          <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
-            Decisions only you can make
-          </h2>
-        </div>
+    <section id="needs-you" className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
+      <div className="mb-6">
+        <SectionLabel tone="signal">priority queue</SectionLabel>
+        <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">
+          Needs you
+        </h2>
+        <p className="mt-2 max-w-xl text-ink-soft">
+          Only the stuff that actually requires a human. Merge? Publish? Call it?
+        </p>
       </div>
 
       {empty ? (
-        <p className="max-w-lg text-ink-soft/80">
-          Nothing is blocked. When a job fails or asks for a merge, publish, or
-          spend decision, it lands here.
-        </p>
+        <div className="hud-frame px-5 py-8">
+          <p className="font-mono text-sm uppercase tracking-[0.18em] text-flight-deep">
+            all clear // no blockers
+          </p>
+          <p className="mt-2 max-w-lg text-ink-soft">
+            Nice. When something fails or needs a decision, it drops in here with
+            a little drama.
+          </p>
+        </div>
       ) : (
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="space-y-3">
           {projects.map((project) => (
-            <li key={`p-${project.id}`} className="flex flex-col gap-2 py-5 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3">
-                <StatusDot tone="signal" />
-                <div>
-                  <Link
-                    href={`/projects/${project.id}`}
-                    className="font-medium text-ink hover:underline"
-                  >
-                    {project.name}
-                  </Link>
-                  <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">
-                    {project.needsYou}
-                  </p>
+            <li key={`p-${project.id}`} className="hud-frame hud-frame-signal px-4 py-4 sm:px-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <StatusChip tone="signal" />
+                  <div>
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight hover:text-signal"
+                    >
+                      {project.name}
+                    </Link>
+                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">
+                      {project.needsYou}
+                    </p>
+                  </div>
                 </div>
+                <span className="pl-5 font-mono text-[11px] uppercase tracking-[0.2em] text-signal sm:pl-0">
+                  project alert
+                </span>
               </div>
-              <span className="pl-5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft/70 sm:pl-0">
-                project
-              </span>
             </li>
           ))}
           {jobs.map((job) => (
-            <li key={`j-${job.id}`} className="flex flex-col gap-2 py-5 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3">
-                <StatusDot tone="signal" />
-                <div>
-                  <p className="font-medium text-ink">{job.title}</p>
-                  <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">
-                    {job.summary || "Needs a decision."}
-                    {job.project ? (
-                      <>
-                        {" "}
-                        <Link
-                          href={`/projects/${job.project.id}`}
-                          className="underline decoration-line underline-offset-2 hover:text-ink"
-                        >
-                          {job.project.name}
-                        </Link>
-                      </>
-                    ) : null}
-                  </p>
+            <li key={`j-${job.id}`} className="hud-frame hud-frame-signal px-4 py-4 sm:px-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <StatusChip tone="signal" />
+                  <div>
+                    <p className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight">
+                      {job.title}
+                    </p>
+                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">
+                      {job.summary || "Needs a decision."}
+                      {job.project ? (
+                        <>
+                          {" "}
+                          <Link
+                            href={`/projects/${job.project.id}`}
+                            className="font-medium text-beam underline decoration-beam/40 underline-offset-2 hover:decoration-beam"
+                          >
+                            {job.project.name}
+                          </Link>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
                 </div>
+                <span className="pl-5 font-mono text-[11px] uppercase tracking-[0.2em] text-signal sm:pl-0">
+                  {job.status.replace("_", " ")}
+                </span>
               </div>
-              <span className="pl-5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft/70 sm:pl-0">
-                {job.status.replace("_", " ")}
-              </span>
             </li>
           ))}
         </ul>
@@ -169,45 +228,55 @@ export function NeedsYouSection({
 
 export function InFlightSection({ jobs }: { jobs: JobWithProject[] }) {
   return (
-    <section id="in-flight" className="mx-auto w-full max-w-6xl px-6 py-16 sm:px-8">
-      <div className="mb-8">
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-flight">
+    <section id="in-flight" className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
+      <div className="mb-6">
+        <SectionLabel tone="flight">async workforce</SectionLabel>
+        <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">
           In flight
-        </p>
-        <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
-          Running while you do something else
         </h2>
+        <p className="mt-2 max-w-xl text-ink-soft">
+          These keep moving while you’re elsewhere. Come back when they’re loud.
+        </p>
       </div>
 
       {jobs.length === 0 ? (
-        <p className="max-w-lg text-ink-soft/80">
-          No queued or running jobs. Phase 3 will dispatch durable workers from
-          chat; for now you can create jobs via the API.
-        </p>
+        <div className="hud-frame hud-frame-flight px-5 py-8">
+          <p className="font-mono text-sm uppercase tracking-[0.18em] text-flight-deep">
+            hangar empty // waiting for launch
+          </p>
+          <p className="mt-2 max-w-lg text-ink-soft">
+            Queue a mission and this lane lights up. Phase 3 wires the real
+            agent dispatch.
+          </p>
+        </div>
       ) : (
         <ul className="space-y-3">
           {jobs.map((job) => (
             <li
               key={job.id}
-              className="sweep-bar flex flex-col gap-2 border border-line bg-white/40 px-4 py-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"
+              className="sweep-bar hud-frame hud-frame-flight px-4 py-4 sm:px-5"
             >
-              <div className="flex items-start gap-3">
-                <StatusDot tone="flight" />
-                <div>
-                  <p className="font-medium">{job.title}</p>
-                  <p className="mt-1 text-sm text-ink-soft">
-                    {job.project?.name ?? "Unknown project"}
-                    {job.summary ? ` — ${job.summary}` : ""}
-                  </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <StatusChip tone="flight" />
+                  <div>
+                    <p className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight">
+                      {job.title}
+                    </p>
+                    <p className="mt-1 text-sm text-ink-soft">
+                      {job.project?.name ?? "Unknown project"}
+                      {job.summary ? ` — ${job.summary}` : ""}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 pl-5 sm:pl-0">
-                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-flight">
-                  {job.status}
-                </span>
-                <span className="text-xs text-ink-soft/70">
-                  {formatRelative(job.updatedAt)}
-                </span>
+                <div className="flex items-center gap-3 pl-5 sm:pl-0">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-flight-deep">
+                    {job.status}
+                  </span>
+                  <span className="font-mono text-xs text-ink-soft/70">
+                    {formatRelative(job.updatedAt)}
+                  </span>
+                </div>
               </div>
             </li>
           ))}
@@ -219,50 +288,49 @@ export function InFlightSection({ jobs }: { jobs: JobWithProject[] }) {
 
 export function ProjectsSection({ projects }: { projects: Project[] }) {
   return (
-    <section id="projects" className="mx-auto w-full max-w-6xl px-6 py-16 sm:px-8">
-      <div className="mb-8 flex items-end justify-between gap-4">
+    <section id="projects" className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
+      <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft/70">
-            Projects
-          </p>
-          <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
-            Active lanes
+          <SectionLabel>mission board</SectionLabel>
+          <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">
+            Project lanes
           </h2>
+          <p className="mt-2 max-w-xl text-ink-soft">
+            Every active outcome stream. Tap in, update the goal, keep rolling.
+          </p>
         </div>
-        <Link
-          href="/projects/new"
-          className="text-sm font-medium text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
-        >
-          Add project
+        <Link href="/projects/new" className="btn-ghost hidden sm:inline-flex">
+          + Add
         </Link>
       </div>
 
       {projects.length === 0 ? (
-        <p className="text-ink-soft/80">No projects yet.</p>
+        <p className="text-ink-soft">No projects yet — go make one.</p>
       ) : (
-        <ul className="divide-y divide-line border-y border-line">
-          {projects.map((project) => (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {projects.map((project, index) => (
             <li key={project.id}>
               <Link
                 href={`/projects/${project.id}`}
-                className="group flex flex-col gap-2 py-5 transition-colors sm:flex-row sm:items-center sm:justify-between"
+                className="group hud-frame block h-full px-5 py-5 transition-transform duration-300 hover:-translate-y-1"
               >
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight group-hover:text-ink">
-                      {project.name}
-                    </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft/60">
-                      {project.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-                    {project.goal || "No goal set yet."}
-                  </p>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-beam">
+                    lane {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft/70">
+                    {project.status}
+                  </span>
                 </div>
-                <span className="text-sm text-ink-soft/70 transition-transform duration-300 group-hover:translate-x-1">
-                  Open →
-                </span>
+                <p className="mt-3 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">
+                  {project.name}
+                </p>
+                <p className="mt-2 line-clamp-2 text-sm text-ink-soft">
+                  {project.goal || "No goal set yet — give me something to chase."}
+                </p>
+                <p className="mt-4 font-mono text-xs uppercase tracking-[0.18em] text-ink-soft transition-colors group-hover:text-flight-deep">
+                  enter lane →
+                </p>
               </Link>
             </li>
           ))}
@@ -275,20 +343,21 @@ export function ProjectsSection({ projects }: { projects: Project[] }) {
 export function RecentSection({ jobs }: { jobs: JobWithProject[] }) {
   if (jobs.length === 0) return null;
   return (
-    <section className="mx-auto w-full max-w-6xl px-6 py-16 sm:px-8">
-      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft/70">
-        Recent outcomes
-      </p>
-      <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
-        Finished since you last looked
+    <section className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
+      <SectionLabel>mission log</SectionLabel>
+      <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">
+        Recent wins
       </h2>
-      <ul className="mt-8 space-y-4">
+      <ul className="mt-6 space-y-3">
         {jobs.map((job) => (
-          <li key={job.id} className="flex items-start gap-3 text-sm">
-            <StatusDot tone="muted" />
+          <li
+            key={job.id}
+            className="flex items-start gap-3 border-l-2 border-beam/50 pl-4 text-sm"
+          >
+            <StatusChip tone="muted" />
             <div>
               <p className="font-medium text-ink">{job.title}</p>
-              <p className="text-ink-soft">
+              <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-soft">
                 {job.project?.name ?? "Project"} · {formatRelative(job.updatedAt)}
               </p>
             </div>

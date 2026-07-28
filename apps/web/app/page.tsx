@@ -18,7 +18,7 @@ export default async function HomePage() {
   return (
     <>
       <SiteHeader />
-      <main className="flex-1 pb-24">
+      <main className="flex-1 pb-20">
         <Hero
           needsCount={data.counts.needsYou}
           inFlightCount={data.counts.inFlight}
@@ -32,8 +32,10 @@ export default async function HomePage() {
         <ProjectsSection projects={data.projects} />
         <RecentSection jobs={data.recent} />
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-6 pb-10 text-xs text-ink-soft/60 sm:px-8">
-        Phase 1 — Project Hub. Chat, jobs dispatch, and voice come next.
+      <footer className="mx-auto w-full max-w-6xl px-5 pb-10 sm:px-8">
+        <div className="hud-frame px-4 py-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">
+          jarvis // phase 1 hub online // chat + voice unlocking next
+        </div>
       </footer>
     </>
   );

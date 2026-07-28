@@ -1,29 +1,30 @@
 import type { Metadata } from "next";
-import { Figtree, JetBrains_Mono, Syne } from "next/font/google";
+import { Outfit, Oxanium, Share_Tech_Mono } from "next/font/google";
+import { Atmosphere } from "@/components/atmosphere";
 import "./globals.css";
 
-const syne = Syne({
+const oxanium = Oxanium({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["500", "600", "700", "800"],
 });
 
-const figtree = Figtree({
+const outfit = Outfit({
   variable: "--font-body",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const mono = JetBrains_Mono({
+const mono = Share_Tech_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
   title: "Jarvis",
   description:
-    "Command center for every project you are working on — with async agents that keep moving while you do something else.",
+    "Your futuristic project command center — talk to it, dispatch agents, keep every lane moving.",
 };
 
 export default function RootLayout({
@@ -34,9 +35,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${syne.variable} ${figtree.variable} ${mono.variable} h-full antialiased`}
+      className={`${oxanium.variable} ${outfit.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col text-ink">{children}</body>
+      <body className="flex min-h-full flex-col text-ink">
+        <Atmosphere />
+        <div className="shell flex min-h-full flex-1 flex-col">{children}</div>
+      </body>
     </html>
   );
 }

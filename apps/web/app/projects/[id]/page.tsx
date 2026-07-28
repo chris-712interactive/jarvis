@@ -20,32 +20,32 @@ export default async function ProjectDetailPage({ params }: Params) {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-16 sm:px-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-14 sm:px-8">
         <Link
           href="/"
-          className="text-sm text-ink-soft transition-colors hover:text-ink"
+          className="font-mono text-xs uppercase tracking-[0.2em] text-ink-soft transition-colors hover:text-beam"
         >
-          ← Command center
+          ← command center
         </Link>
 
-        <div className="mt-8 grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
-          <section>
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft/70">
-              {project.status} · {project.interruptLevel}
+        <div className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="hud-frame px-5 py-6 sm:px-6">
+            <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-beam">
+              {project.status} {"//"} {project.interruptLevel}
             </p>
-            <h1 className="mt-3 font-[family-name:var(--font-display)] text-4xl font-bold tracking-tight sm:text-5xl">
+            <h1 className="mt-3 font-[family-name:var(--font-display)] text-4xl font-extrabold tracking-tight sm:text-5xl">
               {project.name}
             </h1>
             <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink-soft">
-              {project.goal || "No goal set yet."}
+              {project.goal || "No goal set yet — give me something to chase."}
             </p>
             {project.needsYou ? (
-              <p className="mt-6 border-l-2 border-signal pl-4 text-sm text-ink">
-                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-signal">
-                  Needs you
-                </span>
-                <span className="mt-2 block">{project.needsYou}</span>
-              </p>
+              <div className="mt-6 border-l-2 border-signal pl-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-signal">
+                  needs you
+                </p>
+                <p className="mt-2 text-sm text-ink">{project.needsYou}</p>
+              </div>
             ) : null}
             {project.repoUrl ? (
               <p className="mt-6 text-sm">
@@ -53,7 +53,7 @@ export default async function ProjectDetailPage({ params }: Params) {
                   href={project.repoUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="underline decoration-line underline-offset-4 hover:decoration-ink"
+                  className="font-mono text-beam underline decoration-beam/40 underline-offset-4 hover:decoration-beam"
                 >
                   {project.repoUrl}
                 </a>
@@ -65,19 +65,28 @@ export default async function ProjectDetailPage({ params }: Params) {
               </p>
             ) : null}
 
-            <div className="mt-12">
-              <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight">
-                Jobs
+            <div className="mt-10">
+              <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">
+                Lane jobs
               </h2>
               {projectJobs.length === 0 ? (
-                <p className="mt-4 text-sm text-ink-soft">No jobs yet.</p>
+                <p className="mt-4 font-mono text-xs uppercase tracking-[0.16em] text-ink-soft">
+                  hangar empty
+                </p>
               ) : (
-                <ul className="mt-4 divide-y divide-line border-y border-line">
+                <ul className="mt-4 space-y-3">
                   {projectJobs.map((job) => (
-                    <li key={job.id} className="py-4">
+                    <li
+                      key={job.id}
+                      className="border border-line bg-white/40 px-4 py-3"
+                      style={{
+                        clipPath:
+                          "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+                      }}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-medium">{job.title}</p>
-                        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft/70">
+                        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft/80">
                           {job.status.replace("_", " ")}
                         </span>
                       </div>
@@ -91,12 +100,15 @@ export default async function ProjectDetailPage({ params }: Params) {
             </div>
           </section>
 
-          <section>
-            <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight">
-              Edit
+          <section className="hud-frame px-5 py-6 sm:px-6">
+            <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-beam">
+              {"//"} reconfigure
+            </p>
+            <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">
+              Edit lane
             </h2>
             <p className="mt-2 text-sm text-ink-soft">
-              Update the goal, blockers, and interrupt preference.
+              Update the goal, blockers, and how loud I should be.
             </p>
             <div className="mt-6">
               <ProjectForm

@@ -6,8 +6,7 @@ import { useState, type FormEvent } from "react";
 const statuses = ["active", "paused", "archived"] as const;
 const interrupts = ["silent", "digest", "nudge", "interrupt"] as const;
 
-const fieldClass =
-  "w-full rounded-md border border-line bg-white/70 px-3 py-2.5 text-ink outline-none transition focus:border-ink/40 focus:ring-4 focus:ring-[color-mix(in_oklab,var(--glow-a)_45%,transparent)]";
+const fieldClass = "field";
 
 export function ProjectForm({
   mode = "create",
@@ -159,12 +158,8 @@ export function ProjectForm({
 
       {error ? <p className="text-sm text-signal">{error}</p> : null}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition-opacity disabled:opacity-60"
-      >
-        {pending ? "Saving…" : mode === "edit" ? "Save changes" : "Create project"}
+      <button type="submit" disabled={pending} className="btn-primary disabled:opacity-60">
+        {pending ? "Syncing…" : mode === "edit" ? "Save lane" : "Launch lane"}
       </button>
     </form>
   );

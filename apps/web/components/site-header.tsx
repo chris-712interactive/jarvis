@@ -2,27 +2,36 @@ import Link from "next/link";
 
 export function SiteHeader() {
   return (
-    <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pt-8 sm:px-8">
-      <Link href="/" className="group flex items-baseline gap-3">
-        <span className="font-[family-name:var(--font-display)] text-2xl font-extrabold tracking-tight text-ink transition-transform duration-300 group-hover:-translate-y-0.5 sm:text-3xl">
-          Jarvis
+    <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-5 pt-6 sm:px-8 sm:pt-8">
+      <Link href="/" className="group flex items-center gap-3">
+        <span className="relative flex h-9 w-9 items-center justify-center border border-beam/50 bg-white/50 transition-transform duration-300 group-hover:rotate-45">
+          <span className="h-2.5 w-2.5 bg-flight" />
         </span>
-        <span className="hidden font-mono text-[11px] uppercase tracking-[0.22em] text-ink-soft/70 sm:inline">
-          command center
+        <span className="flex flex-col">
+          <span className="brand-mark font-[family-name:var(--font-display)] text-2xl font-extrabold uppercase tracking-[0.08em] sm:text-3xl">
+            Jarvis
+          </span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.28em] text-ink-soft">
+            systems online
+            <span className="boot-blink text-flight">_</span>
+          </span>
         </span>
       </Link>
       <nav className="flex items-center gap-2 sm:gap-3">
         <Link
           href="/#needs-you"
-          className="px-3 py-2 text-sm text-ink-soft transition-colors hover:text-ink"
+          className="hidden px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-ink-soft transition-colors hover:text-signal sm:inline"
         >
-          Needs you
+          Alerts
         </Link>
         <Link
-          href="/projects/new"
-          className="rounded-md bg-ink px-3.5 py-2 text-sm font-medium text-paper transition-colors hover:bg-ink-soft"
+          href="/#in-flight"
+          className="hidden px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-ink-soft transition-colors hover:text-flight sm:inline"
         >
-          Add project
+          Lanes
+        </Link>
+        <Link href="/projects/new" className="btn-primary">
+          + New lane
         </Link>
       </nav>
     </header>
