@@ -34,7 +34,7 @@ export default async function HomePage() {
       </main>
       <footer className="mx-auto w-full max-w-6xl px-5 pb-10 sm:px-8">
         <div className="hud-frame px-4 py-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">
-          jarvis // phase 1 hub online // chat + voice unlocking next
+          jarvis // arc reactor stable // phase 1 hub online // chat + voice next
         </div>
       </footer>
     </>

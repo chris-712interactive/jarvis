@@ -4,8 +4,8 @@ export function SiteHeader() {
   return (
     <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-5 pt-6 sm:px-8 sm:pt-8">
       <Link href="/" className="group flex items-center gap-3">
-        <span className="relative flex h-9 w-9 items-center justify-center border border-beam/50 bg-white/50 transition-transform duration-300 group-hover:rotate-45">
-          <span className="h-2.5 w-2.5 bg-flight" />
+        <span className="relative flex h-9 w-9 items-center justify-center border border-beam/50 bg-[color-mix(in_oklab,var(--panel)_90%,transparent)] shadow-[0_0_18px_color-mix(in_oklab,var(--beam)_25%,transparent)] transition-transform duration-300 group-hover:rotate-45">
+          <span className="h-2.5 w-2.5 bg-flight shadow-[0_0_10px_var(--flight)]" />
         </span>
         <span className="flex flex-col">
           <span className="brand-mark font-[family-name:var(--font-display)] text-2xl font-extrabold uppercase tracking-[0.08em] sm:text-3xl">

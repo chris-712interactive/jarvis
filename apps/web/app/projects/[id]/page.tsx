@@ -78,7 +78,7 @@ export default async function ProjectDetailPage({ params }: Params) {
                   {projectJobs.map((job) => (
                     <li
                       key={job.id}
-                      className="border border-line bg-white/40 px-4 py-3"
+                      className="border border-line bg-[color-mix(in_oklab,var(--panel)_90%,transparent)] px-4 py-3"
                       style={{
                         clipPath:
                           "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",

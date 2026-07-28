@@ -24,7 +24,7 @@ const mono = Share_Tech_Mono({
 export const metadata: Metadata = {
   title: "Jarvis",
   description:
-    "Your futuristic project command center — talk to it, dispatch agents, keep every lane moving.",
+    "Dark holographic command center — talk to it, dispatch agents, keep every lane moving.",
 };
 
 export default function RootLayout({

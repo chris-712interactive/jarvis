@@ -4,6 +4,7 @@ export function Atmosphere() {
       <div className="atmosphere-grid" />
       <div className="atmosphere-orb a" />
       <div className="atmosphere-orb b" />
+      <div className="atmosphere-reactor" />
       <div className="atmosphere-scan" />
     </div>
   );

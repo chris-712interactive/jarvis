@@ -1,19 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --void: #071018;
-  --ink: #0a1628;
-  --ink-soft: #3d4f6a;
-  --paper: #f3fbff;
-  --panel: rgba(255, 255, 255, 0.72);
-  --signal: #ff3d6e;
-  --signal-deep: #d0184a;
-  --flight: #00e5a8;
-  --flight-deep: #00a878;
-  --beam: #19c6ff;
-  --sun: #ffe566;
-  --line: color-mix(in oklab, var(--ink) 14%, transparent);
-  --grid: color-mix(in oklab, var(--beam) 22%, transparent);
+  --void: #02060c;
+  --ink: #e8f6ff;
+  --ink-soft: #7fa8c2;
+  --paper: #050b14;
+  --panel: rgba(6, 22, 40, 0.62);
+  --panel-strong: rgba(4, 16, 30, 0.88);
+  --signal: #ff6b3d;
+  --signal-deep: #d44820;
+  --flight: #3dffd2;
+  --flight-deep: #14c9a0;
+  --beam: #4de8ff;
+  --beam-deep: #1090c8;
+  --sun: #f0b429;
+  --arc: #6ef3ff;
+  --line: color-mix(in oklab, var(--beam) 22%, transparent);
+  --grid: color-mix(in oklab, var(--beam) 14%, transparent);
+  --glow-soft: color-mix(in oklab, var(--beam) 35%, transparent);
   --background: var(--paper);
   --foreground: var(--ink);
 }
@@ -43,19 +47,20 @@
 
 html {
   scroll-behavior: smooth;
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   min-height: 100%;
   color: var(--foreground);
-  background-color: #dff4ff;
+  background-color: var(--void);
   background-image:
-    radial-gradient(ellipse 90% 70% at 50% -20%, #ffffff 0%, transparent 55%),
-    radial-gradient(circle at 88% 12%, color-mix(in oklab, var(--sun) 55%, white), transparent 28%),
-    radial-gradient(circle at 8% 30%, color-mix(in oklab, var(--beam) 35%, white), transparent 32%),
-    radial-gradient(circle at 70% 85%, color-mix(in oklab, var(--flight) 28%, white), transparent 36%),
-    linear-gradient(165deg, #e8f8ff 0%, #f7fcff 40%, #eef9f4 100%);
+    radial-gradient(ellipse 80% 55% at 50% -15%, color-mix(in oklab, var(--beam-deep) 38%, transparent), transparent 62%),
+    radial-gradient(circle at 82% 18%, color-mix(in oklab, var(--arc) 18%, transparent), transparent 28%),
+    radial-gradient(circle at 12% 72%, color-mix(in oklab, var(--flight) 10%, transparent), transparent 32%),
+    radial-gradient(ellipse 60% 40% at 50% 110%, color-mix(in oklab, var(--sun) 8%, transparent), transparent 55%),
+    linear-gradient(165deg, #02060c 0%, #06101c 45%, #040a12 100%);
   background-attachment: fixed;
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   overflow-x: hidden;
@@ -67,8 +72,8 @@ a {
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--beam) 40%, white);
-  color: var(--ink);
+  background: color-mix(in oklab, var(--beam) 45%, transparent);
+  color: white;
 }
 
 .atmosphere {
@@ -86,36 +91,36 @@ a {
     linear-gradient(to right, var(--grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
   background-size: 56px 56px;
-  transform: perspective(600px) rotateX(58deg) translateY(-12%) scale(1.35);
+  transform: perspective(700px) rotateX(58deg) translateY(-12%) scale(1.4);
   transform-origin: center top;
-  opacity: 0.45;
-  animation: grid-drift 18s linear infinite;
+  opacity: 0.35;
+  animation: grid-drift 22s linear infinite;
+  mask-image: linear-gradient(180deg, black 0%, transparent 78%);
 }
 
 .atmosphere-orb {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(2px);
-  opacity: 0.55;
-  mix-blend-mode: multiply;
+  filter: blur(40px);
+  opacity: 0.45;
 }
 
 .atmosphere-orb.a {
-  width: 28rem;
-  height: 28rem;
-  top: -6rem;
-  right: -4rem;
-  background: radial-gradient(circle, color-mix(in oklab, var(--sun) 70%, white), transparent 70%);
-  animation: float-orb 12s ease-in-out infinite;
+  width: 30rem;
+  height: 30rem;
+  top: -8rem;
+  right: -5rem;
+  background: radial-gradient(circle, color-mix(in oklab, var(--beam) 55%, transparent), transparent 70%);
+  animation: float-orb 14s ease-in-out infinite;
 }
 
 .atmosphere-orb.b {
-  width: 22rem;
-  height: 22rem;
-  bottom: 10%;
-  left: -6rem;
-  background: radial-gradient(circle, color-mix(in oklab, var(--flight) 55%, white), transparent 70%);
-  animation: float-orb 15s ease-in-out infinite reverse;
+  width: 24rem;
+  height: 24rem;
+  bottom: 8%;
+  left: -7rem;
+  background: radial-gradient(circle, color-mix(in oklab, var(--flight) 40%, transparent), transparent 70%);
+  animation: float-orb 17s ease-in-out infinite reverse;
 }
 
 .atmosphere-scan {
@@ -124,13 +129,49 @@ a {
   background: linear-gradient(
     180deg,
     transparent 0%,
-    color-mix(in oklab, var(--beam) 8%, transparent) 48%,
+    color-mix(in oklab, var(--beam) 10%, transparent) 48%,
     transparent 52%,
     transparent 100%
   );
-  background-size: 100% 220%;
-  animation: scan-sweep 7s ease-in-out infinite;
-  opacity: 0.5;
+  background-size: 100% 240%;
+  animation: scan-sweep 8s ease-in-out infinite;
+  opacity: 0.55;
+}
+
+.atmosphere-reactor {
+  position: absolute;
+  top: 18%;
+  right: 8%;
+  width: min(340px, 55vw);
+  height: min(340px, 55vw);
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--beam) 35%, transparent);
+  box-shadow:
+    0 0 40px color-mix(in oklab, var(--beam) 18%, transparent),
+    inset 0 0 40px color-mix(in oklab, var(--beam) 10%, transparent);
+  opacity: 0.55;
+  animation: reactor-breathe 5.5s ease-in-out infinite;
+}
+
+.atmosphere-reactor::before,
+.atmosphere-reactor::after {
+  content: "";
+  position: absolute;
+  inset: 18%;
+  border-radius: 9999px;
+  border: 1px dashed color-mix(in oklab, var(--arc) 40%, transparent);
+}
+
+.atmosphere-reactor::after {
+  inset: 34%;
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--flight) 45%, transparent);
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--arc) 28%, transparent) 0%,
+    transparent 70%
+  );
+  animation: orbit 28s linear infinite;
 }
 
 .shell {
@@ -141,8 +182,11 @@ a {
 .hud-frame {
   position: relative;
   background: var(--panel);
-  border: 1px solid color-mix(in oklab, var(--ink) 16%, transparent);
-  backdrop-filter: blur(10px);
+  border: 1px solid color-mix(in oklab, var(--beam) 28%, transparent);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--beam) 12%, transparent),
+    0 0 24px color-mix(in oklab, var(--beam) 6%, transparent);
   clip-path: polygon(
     0 12px,
     12px 0,
@@ -179,7 +223,10 @@ a {
 }
 
 .hud-frame-signal {
-  border-color: color-mix(in oklab, var(--signal) 45%, transparent);
+  border-color: color-mix(in oklab, var(--signal) 50%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--signal) 14%, transparent),
+    0 0 28px color-mix(in oklab, var(--signal) 10%, transparent);
 }
 
 .hud-frame-signal::before,
@@ -188,19 +235,29 @@ a {
 }
 
 .hud-frame-flight {
-  border-color: color-mix(in oklab, var(--flight-deep) 40%, transparent);
+  border-color: color-mix(in oklab, var(--flight) 42%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--flight) 12%, transparent),
+    0 0 28px color-mix(in oklab, var(--flight) 8%, transparent);
 }
 
 .hud-frame-flight::before,
 .hud-frame-flight::after {
-  border-color: var(--flight-deep);
+  border-color: var(--flight);
 }
 
 .brand-mark {
-  background: linear-gradient(115deg, var(--ink) 20%, var(--beam) 55%, var(--flight) 85%);
+  background: linear-gradient(
+    115deg,
+    #ffffff 8%,
+    var(--beam) 42%,
+    var(--arc) 68%,
+    var(--flight) 100%
+  );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  filter: drop-shadow(0 0 18px color-mix(in oklab, var(--beam) 35%, transparent));
 }
 
 .live-dot {
@@ -209,6 +266,7 @@ a {
   border-radius: 1px;
   transform: rotate(45deg);
   animation: pulse-lane 1.6s ease-in-out infinite;
+  box-shadow: 0 0 10px currentColor;
 }
 
 .ticker {
@@ -315,6 +373,18 @@ a {
   }
 }
 
+@keyframes reactor-breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.03);
+  }
+}
+
 .animate-rise {
   animation: rise-in 750ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -356,7 +426,7 @@ a {
   background: linear-gradient(
     90deg,
     transparent,
-    color-mix(in oklab, var(--flight) 45%, transparent),
+    color-mix(in oklab, var(--flight) 35%, transparent),
     transparent
   );
   animation: sweep 2.2s ease-in-out infinite;
@@ -367,10 +437,11 @@ a {
   inset: 8% auto auto 52%;
   width: min(420px, 70vw);
   height: min(420px, 70vw);
-  border: 1px dashed color-mix(in oklab, var(--beam) 45%, transparent);
+  border: 1px dashed color-mix(in oklab, var(--beam) 40%, transparent);
   border-radius: 9999px;
   animation: orbit 40s linear infinite;
   pointer-events: none;
+  box-shadow: 0 0 40px color-mix(in oklab, var(--beam) 12%, transparent);
 }
 
 .orbit-ring::before {
@@ -381,7 +452,17 @@ a {
   width: 10px;
   height: 10px;
   background: var(--flight);
+  box-shadow: 0 0 12px var(--flight);
   transform: translateX(-50%) rotate(45deg);
+}
+
+.orbit-ring::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--arc) 25%, transparent);
+  animation: orbit 22s linear infinite reverse;
 }
 
 .btn-primary {
@@ -390,18 +471,19 @@ a {
   justify-content: center;
   gap: 0.5rem;
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-  background: var(--ink);
-  color: white;
+  background: linear-gradient(120deg, var(--beam-deep), color-mix(in oklab, var(--beam) 70%, #08304a));
+  color: #041018;
   padding: 0.7rem 1.1rem;
   font-weight: 700;
   font-size: 0.875rem;
   letter-spacing: 0.02em;
-  transition: transform 220ms ease, background 220ms ease;
+  box-shadow: 0 0 20px color-mix(in oklab, var(--beam) 28%, transparent);
+  transition: transform 220ms ease, filter 220ms ease;
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  background: color-mix(in oklab, var(--ink) 85%, var(--beam));
+  filter: brightness(1.08);
 }
 
 .btn-signal {
@@ -411,6 +493,7 @@ a {
   padding: 0.7rem 1.1rem;
   font-weight: 700;
   font-size: 0.875rem;
+  box-shadow: 0 0 18px color-mix(in oklab, var(--signal) 30%, transparent);
   transition: transform 220ms ease;
 }
 
@@ -420,25 +503,26 @@ a {
 
 .btn-ghost {
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-  border: 1px solid color-mix(in oklab, var(--ink) 20%, transparent);
-  background: color-mix(in oklab, white 55%, transparent);
+  border: 1px solid color-mix(in oklab, var(--beam) 40%, transparent);
+  background: color-mix(in oklab, var(--panel-strong) 80%, transparent);
   color: var(--ink);
   padding: 0.7rem 1.1rem;
   font-weight: 600;
   font-size: 0.875rem;
-  transition: background 220ms ease, transform 220ms ease;
+  transition: background 220ms ease, transform 220ms ease, box-shadow 220ms ease;
 }
 
 .btn-ghost:hover {
-  background: white;
+  background: color-mix(in oklab, var(--beam) 14%, var(--panel-strong));
+  box-shadow: 0 0 18px color-mix(in oklab, var(--beam) 18%, transparent);
   transform: translateY(-2px);
 }
 
 .field {
   width: 100%;
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-  border: 1px solid color-mix(in oklab, var(--ink) 16%, transparent);
-  background: color-mix(in oklab, white 78%, transparent);
+  border: 1px solid color-mix(in oklab, var(--beam) 28%, transparent);
+  background: color-mix(in oklab, #031018 88%, transparent);
   padding: 0.7rem 0.8rem;
   font: inherit;
   color: var(--ink);
@@ -447,6 +531,18 @@ a {
 }
 
 .field:focus {
-  border-color: color-mix(in oklab, var(--beam) 70%, var(--ink));
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--beam) 28%, transparent);
+  border-color: color-mix(in oklab, var(--beam) 80%, white);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--beam) 22%, transparent);
+}
+
+.field option {
+  background: #071422;
+  color: var(--ink);
+}
+
+.chip-live {
+  border: 1px solid color-mix(in oklab, var(--flight) 45%, transparent);
+  background: color-mix(in oklab, var(--flight) 10%, transparent);
+  color: var(--flight);
+  box-shadow: 0 0 16px color-mix(in oklab, var(--flight) 15%, transparent);
 }

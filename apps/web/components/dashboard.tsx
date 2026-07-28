@@ -40,7 +40,7 @@ function SectionLabel({
     tone === "signal"
       ? "text-signal"
       : tone === "flight"
-        ? "text-flight-deep"
+        ? "text-flight"
         : "text-beam";
   return (
     <p
@@ -63,26 +63,26 @@ export function Hero({
 }) {
   const headline =
     needsCount > 0
-      ? "Hey — you've got company."
+      ? "Sir — your attention is required."
       : inFlightCount > 0
-        ? "Engines are humming."
-        : "Ready when you are.";
+        ? "All systems operational."
+        : "Standing by, sir.";
 
   const support =
     needsCount > 0
-      ? `${needsCount} thing${needsCount === 1 ? "" : "s"} need a human call. Everything else can keep flying.`
+      ? `${needsCount} item${needsCount === 1 ? "" : "s"} require a human decision. Remaining protocols continue unsupervised.`
       : inFlightCount > 0
-        ? `${inFlightCount} job${inFlightCount === 1 ? "" : "s"} spinning across ${projectCount} lane${projectCount === 1 ? "" : "s"} while you do literally anything else.`
-        : "Spin up a project lane and I’ll hold the board — coffee runs count as deep work.";
+        ? `${inFlightCount} process${inFlightCount === 1 ? "" : "es"} active across ${projectCount} project lane${projectCount === 1 ? "" : "s"}. I have the watch.`
+        : "Initialize a project lane and I will maintain situational awareness while you work elsewhere.";
 
   const tickerItems = [
     `lanes:${projectCount}`,
     `alerts:${needsCount}`,
     `inflight:${inFlightCount}`,
+    "reactor:stable",
     "mode:command",
-    "voice:coming_soon",
-    "agents:standby",
-    "fun:enabled",
+    "voice:standby",
+    "agents:armed",
   ];
 
   return (
@@ -90,9 +90,9 @@ export function Hero({
       <div className="orbit-ring hidden md:block" aria-hidden />
 
       <div className="relative">
-        <div className="animate-rise inline-flex items-center gap-2 border border-flight/40 bg-white/50 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.22em] text-flight-deep">
+        <div className="animate-rise chip-live inline-flex items-center gap-2 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.22em]">
           <span className="live-dot bg-flight" />
-          live uplink
+          holographic uplink
         </div>
 
         <p className="animate-rise-delay-1 brand-mark mt-6 font-[family-name:var(--font-display)] text-6xl font-extrabold uppercase leading-[0.9] tracking-[0.04em] sm:text-8xl md:text-9xl">
@@ -109,10 +109,10 @@ export function Hero({
 
         <div className="animate-rise-delay-4 mt-8 flex flex-wrap gap-3">
           <a href="#needs-you" className="btn-signal">
-            Check alerts
+            Review alerts
           </a>
           <Link href="/projects/new" className="btn-ghost">
-            Open a new lane
+            Initialize lane
           </Link>
         </div>
       </div>
@@ -122,7 +122,7 @@ export function Hero({
           <div className="ticker-track">
             {[...tickerItems, ...tickerItems].map((item, i) => (
               <span key={`${item}-${i}`} className="inline-flex items-center gap-2">
-                <span className="inline-block h-1.5 w-1.5 rotate-45 bg-beam" />
+                <span className="inline-block h-1.5 w-1.5 rotate-45 bg-beam shadow-[0_0_8px_var(--beam)]" />
                 {item}
               </span>
             ))}
@@ -150,18 +150,18 @@ export function NeedsYouSection({
           Needs you
         </h2>
         <p className="mt-2 max-w-xl text-ink-soft">
-          Only the stuff that actually requires a human. Merge? Publish? Call it?
+          Human-in-the-loop only. Merge, publish, or decide — I hold everything else.
         </p>
       </div>
 
       {empty ? (
         <div className="hud-frame px-5 py-8">
-          <p className="font-mono text-sm uppercase tracking-[0.18em] text-flight-deep">
+          <p className="font-mono text-sm uppercase tracking-[0.18em] text-flight">
             all clear // no blockers
           </p>
           <p className="mt-2 max-w-lg text-ink-soft">
-            Nice. When something fails or needs a decision, it drops in here with
-            a little drama.
+            Quiet skies. Failures and decision points surface here the moment they
+            require you.
           </p>
         </div>
       ) : (
@@ -235,18 +235,19 @@ export function InFlightSection({ jobs }: { jobs: JobWithProject[] }) {
           In flight
         </h2>
         <p className="mt-2 max-w-xl text-ink-soft">
-          These keep moving while you’re elsewhere. Come back when they’re loud.
+          Background protocols keep running while you are elsewhere. I interrupt
+          only when thresholds are crossed.
         </p>
       </div>
 
       {jobs.length === 0 ? (
         <div className="hud-frame hud-frame-flight px-5 py-8">
-          <p className="font-mono text-sm uppercase tracking-[0.18em] text-flight-deep">
-            hangar empty // waiting for launch
+          <p className="font-mono text-sm uppercase tracking-[0.18em] text-flight">
+            hangar empty // awaiting launch
           </p>
           <p className="mt-2 max-w-lg text-ink-soft">
-            Queue a mission and this lane lights up. Phase 3 wires the real
-            agent dispatch.
+            Queue a mission and this lane illuminates. Phase 3 wires live agent
+            dispatch.
           </p>
         </div>
       ) : (
@@ -270,7 +271,7 @@ export function InFlightSection({ jobs }: { jobs: JobWithProject[] }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 pl-5 sm:pl-0">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-flight-deep">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-flight">
                     {job.status}
                   </span>
                   <span className="font-mono text-xs text-ink-soft/70">
@@ -296,7 +297,7 @@ export function ProjectsSection({ projects }: { projects: Project[] }) {
             Project lanes
           </h2>
           <p className="mt-2 max-w-xl text-ink-soft">
-            Every active outcome stream. Tap in, update the goal, keep rolling.
+            Active outcome streams under my watch. Enter a lane to reconfigure.
           </p>
         </div>
         <Link href="/projects/new" className="btn-ghost hidden sm:inline-flex">
@@ -326,9 +327,9 @@ export function ProjectsSection({ projects }: { projects: Project[] }) {
                   {project.name}
                 </p>
                 <p className="mt-2 line-clamp-2 text-sm text-ink-soft">
-                  {project.goal || "No goal set yet — give me something to chase."}
+                  {project.goal || "No goal set — assign an objective."}
                 </p>
-                <p className="mt-4 font-mono text-xs uppercase tracking-[0.18em] text-ink-soft transition-colors group-hover:text-flight-deep">
+                <p className="mt-4 font-mono text-xs uppercase tracking-[0.18em] text-ink-soft transition-colors group-hover:text-flight">
                   enter lane →
                 </p>
               </Link>
