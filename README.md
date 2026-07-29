@@ -7,15 +7,26 @@ An AI command center for everything you’re working on — with a conversationa
 - [Architecture & build guide](docs/ARCHITECTURE.md)
 - [Product contract](docs/PRODUCT.md)
 
-## Phase 1 (implemented)
+## Phase 1–2 (implemented)
 
 Project Hub + dashboard shell in `apps/web`:
 
-- SQLite + Drizzle schema for `projects` and `jobs`
-- REST APIs under `/api/projects` and `/api/jobs`
+- SQLite + Drizzle schema for `projects`, `jobs`, `conversations`, `messages`
+- REST APIs under `/api/projects`, `/api/jobs`, `/api/chat`, `/api/conversations`
 - Dashboard lanes: **Needs you** / **In flight** / **Projects** / Recent outcomes
 - Create + edit projects
 - **Obsidian vault path per project** + read-only notes browse/search API
+- **Phase 2 chat uplink** grounded on a selected lane with read-only tools
+
+### Chat (Phase 2)
+
+1. Copy `apps/web/.env.example` → `apps/web/.env.local`
+2. Set `OPENAI_API_KEY`
+3. `npm run dev` and click **Open uplink** on the command center
+
+Read-only tools available to the operator:
+- dashboard / project / job status
+- Obsidian list, search, and read for the active lane
 
 ### Obsidian vaults (local memory)
 
@@ -47,8 +58,8 @@ npm run db:seed  # seed if empty
 
 ## Build order
 
-1. ~~Project Hub + dashboard~~ 
-2. Project-grounded chat (read-only tools)
+1. ~~Project Hub + dashboard~~
+2. ~~Project-grounded chat (read-only tools)~~
 3. Async jobs + notifications
 4. Voice push-to-talk
 5. Dispatch coding agents as workers

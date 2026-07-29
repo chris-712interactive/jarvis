@@ -59,9 +59,27 @@ function createSqlite() {
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+      title TEXT NOT NULL DEFAULT 'Command chat',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS jobs_project_id_idx ON jobs(project_id);
     CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status);
     CREATE INDEX IF NOT EXISTS projects_status_idx ON projects(status);
+    CREATE INDEX IF NOT EXISTS conversations_project_id_idx ON conversations(project_id);
+    CREATE INDEX IF NOT EXISTS messages_conversation_id_idx ON messages(conversation_id);
   `);
   migrateProjectsTable(sqlite);
   return sqlite;
