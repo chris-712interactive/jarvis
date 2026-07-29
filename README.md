@@ -15,6 +15,17 @@ Project Hub + dashboard shell in `apps/web`:
 - REST APIs under `/api/projects` and `/api/jobs`
 - Dashboard lanes: **Needs you** / **In flight** / **Projects** / Recent outcomes
 - Create + edit projects
+- **Obsidian vault path per project** + read-only notes browse/search API
+
+### Obsidian vaults (local memory)
+
+Each project can point at a local folder (an Obsidian vault or any markdown tree):
+
+- Absolute path, `~/...`, or a path relative to `apps/web` (e.g. `fixtures/sample-vault`)
+- Read-only: list / search / open `.md` notes
+- APIs: `GET /api/projects/:id/notes`, `GET /api/projects/:id/notes/read?path=...`
+
+Seed data wires **Command hub** to `fixtures/sample-vault` for a quick demo.
 
 ### Run locally
 

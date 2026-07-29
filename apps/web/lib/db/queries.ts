@@ -53,6 +53,7 @@ export type CreateProjectInput = {
   status?: ProjectStatus;
   repoUrl?: string | null;
   notes?: string;
+  vaultPath?: string | null;
   needsYou?: string | null;
   interruptLevel?: InterruptLevel;
 };
@@ -74,6 +75,7 @@ export async function createProject(input: CreateProjectInput) {
     status: input.status ?? "active",
     repoUrl: input.repoUrl?.trim() || null,
     notes: input.notes?.trim() ?? "",
+    vaultPath: input.vaultPath?.trim() || null,
     needsYou: input.needsYou?.trim() || null,
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
@@ -100,6 +102,10 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
         ? input.repoUrl?.trim() || null
         : existing.repoUrl,
     notes: input.notes !== undefined ? input.notes.trim() : existing.notes,
+    vaultPath:
+      input.vaultPath !== undefined
+        ? input.vaultPath?.trim() || null
+        : existing.vaultPath,
     needsYou:
       input.needsYou !== undefined
         ? input.needsYou?.trim() || null
@@ -237,6 +243,7 @@ export async function seedIfEmpty() {
     goal: "Ship a command center for every active project with async agents.",
     repoUrl: "https://github.com/chris-712interactive/jarvis",
     notes: "Control plane + conversation + job tracking.",
+    vaultPath: "fixtures/sample-vault",
     needsYou: "Confirm Phase 1 dashboard direction and add your real projects.",
     interruptLevel: "nudge",
   });

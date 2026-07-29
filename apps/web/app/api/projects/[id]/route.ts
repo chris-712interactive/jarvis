@@ -36,6 +36,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const project = await updateProject(id, {
     ...parsed.data,
     repoUrl: parsed.data.repoUrl,
+    vaultPath: parsed.data.vaultPath,
     needsYou: parsed.data.needsYou,
   });
   if (!project) {

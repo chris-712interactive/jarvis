@@ -26,6 +26,7 @@ export const projects = sqliteTable("projects", {
   status: text("status").$type<ProjectStatus>().notNull().default("active"),
   repoUrl: text("repo_url"),
   notes: text("notes").notNull().default(""),
+  vaultPath: text("vault_path"),
   needsYou: text("needs_you"),
   interruptLevel: text("interrupt_level")
     .$type<InterruptLevel>()

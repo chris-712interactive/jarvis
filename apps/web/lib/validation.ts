@@ -30,6 +30,7 @@ export const createProjectSchema = z.object({
   status: z.enum(projectStatuses).optional().default("active"),
   repoUrl: optionalUrl,
   notes: z.string().trim().max(8000).optional().default(""),
+  vaultPath: optionalText,
   needsYou: optionalText,
   interruptLevel: z.enum(interruptLevels).optional().default("digest"),
 });

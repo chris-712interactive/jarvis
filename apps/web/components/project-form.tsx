@@ -21,6 +21,7 @@ export function ProjectForm({
     status: (typeof statuses)[number];
     repoUrl: string;
     notes: string;
+    vaultPath: string;
     needsYou: string;
     interruptLevel: (typeof interrupts)[number];
   };
@@ -41,6 +42,7 @@ export function ProjectForm({
       status: String(form.get("status") ?? "active"),
       repoUrl: String(form.get("repoUrl") ?? "") || null,
       notes: String(form.get("notes") ?? ""),
+      vaultPath: String(form.get("vaultPath") ?? "") || null,
       needsYou: String(form.get("needsYou") ?? "") || null,
       interruptLevel: String(form.get("interruptLevel") ?? "digest"),
     };
@@ -135,6 +137,16 @@ export function ProjectForm({
         />
       </Field>
 
+      <Field label="Obsidian vault path" htmlFor="vaultPath">
+        <input
+          id="vaultPath"
+          name="vaultPath"
+          defaultValue={initial?.vaultPath}
+          className={fieldClass}
+          placeholder="~/Documents/Obsidian/Work or fixtures/sample-vault"
+        />
+      </Field>
+
       <Field label="Needs you (optional)" htmlFor="needsYou">
         <input
           id="needsYou"
@@ -145,14 +157,14 @@ export function ProjectForm({
         />
       </Field>
 
-      <Field label="Notes" htmlFor="notes">
+      <Field label="Inline notes" htmlFor="notes">
         <textarea
           id="notes"
           name="notes"
           rows={4}
           defaultValue={initial?.notes}
           className={fieldClass}
-          placeholder="Conventions, links, context to remember."
+          placeholder="Short structured facts kept in the hub DB."
         />
       </Field>
 

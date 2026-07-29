@@ -16,6 +16,15 @@ declare global {
   var __jarvisDb: ReturnType<typeof drizzle<typeof schema>> | undefined;
 }
 
+function migrateProjectsTable(sqlite: Database.Database) {
+  const columns = sqlite
+    .prepare(`PRAGMA table_info(projects)`)
+    .all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "vault_path")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN vault_path TEXT`);
+  }
+}
+
 function createSqlite() {
   ensureDatabaseFile();
   const sqlite = new Database(dbPath);
@@ -30,6 +39,7 @@ function createSqlite() {
       status TEXT NOT NULL DEFAULT 'active',
       repo_url TEXT,
       notes TEXT NOT NULL DEFAULT '',
+      vault_path TEXT,
       needs_you TEXT,
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,
@@ -53,12 +63,15 @@ function createSqlite() {
     CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status);
     CREATE INDEX IF NOT EXISTS projects_status_idx ON projects(status);
   `);
+  migrateProjectsTable(sqlite);
   return sqlite;
 }
 
 function getSqlite() {
   if (!globalThis.__jarvisSqlite) {
     globalThis.__jarvisSqlite = createSqlite();
+  } else {
+    migrateProjectsTable(globalThis.__jarvisSqlite);
   }
   return globalThis.__jarvisSqlite;
 }

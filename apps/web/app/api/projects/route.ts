@@ -28,6 +28,7 @@ export async function POST(request: Request) {
   const project = await createProject({
     ...parsed.data,
     repoUrl: parsed.data.repoUrl ?? null,
+    vaultPath: parsed.data.vaultPath ?? null,
     needsYou: parsed.data.needsYou ?? null,
   });
 
