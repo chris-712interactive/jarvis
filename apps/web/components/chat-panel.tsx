@@ -9,10 +9,12 @@ import { signalJobsChanged } from "@/components/job-poller";
 import {
   AMBIENT_STORAGE_KEY,
   DEFAULT_WAKE_WORD,
+  SPEAK_REPLIES_STORAGE_KEY,
   WAKE_WORD_STORAGE_KEY,
   sanitizeVoiceCommand,
   speakText,
   stopSpeaking,
+  textForSpeech,
 } from "@/lib/speech/browser";
 import type { Project } from "@/lib/db/schema";
 
@@ -53,6 +55,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [ambientEnabled, setAmbientEnabled] = useState(false);
+  const [speakReplies, setSpeakReplies] = useState(true);
   const [wakeWord, setWakeWord] = useState(DEFAULT_WAKE_WORD);
   const [hydrated, setHydrated] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -62,6 +65,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   const conversationIdRef = useRef(conversationId);
   const busyRef = useRef(false);
   const voiceOriginRef = useRef(false);
+  const speakRepliesRef = useRef(true);
   const lastSpokenIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const sendMessageRef = useRef<(payload: { text: string }) => Promise<void>>(
@@ -70,6 +74,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   const clearErrorRef = useRef<() => void>(() => undefined);
   projectIdRef.current = projectId;
   conversationIdRef.current = conversationId;
+  speakRepliesRef.current = speakReplies;
 
   const transport = useMemo(
     () =>
@@ -192,8 +197,12 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     try {
       const storedAmbient = window.localStorage.getItem(AMBIENT_STORAGE_KEY);
       const storedWake = window.localStorage.getItem(WAKE_WORD_STORAGE_KEY);
+      const storedSpeak = window.localStorage.getItem(SPEAK_REPLIES_STORAGE_KEY);
       if (storedAmbient === "1") setAmbientEnabled(true);
       if (storedWake?.trim()) setWakeWord(storedWake.trim().toLowerCase());
+      // Default ON so typed and spoken replies are both heard.
+      if (storedSpeak === "0") setSpeakReplies(false);
+      else setSpeakReplies(true);
     } catch {
       // ignore storage failures
     }
@@ -211,6 +220,18 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
       // ignore
     }
   }, [ambientEnabled, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(
+        SPEAK_REPLIES_STORAGE_KEY,
+        speakReplies ? "1" : "0",
+      );
+    } catch {
+      // ignore
+    }
+  }, [speakReplies, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -304,10 +325,13 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     }
   }, [status, messages]);
 
-  // Speak assistant replies that came from voice (ambient / mic).
+  // Speak assistant replies (typed or voice) when Speak is on.
   useEffect(() => {
     if (status !== "ready") return;
-    if (!voiceOriginRef.current) return;
+    if (!speakRepliesRef.current) {
+      voiceOriginRef.current = false;
+      return;
+    }
 
     const lastAssistant = [...messages]
       .reverse()
@@ -317,9 +341,8 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
       return;
     }
 
-    const text = messageText(lastAssistant);
+    const text = textForSpeech(messageText(lastAssistant));
     if (!text) {
-      // Tool-only / empty — don't leave the voice flag stuck forever.
       voiceOriginRef.current = false;
       return;
     }
@@ -430,6 +453,27 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             >
               {ambientEnabled ? "Ambient on" : "Ambient off"}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSpeakReplies((value) => {
+                  const next = !value;
+                  if (!next) {
+                    stopSpeaking();
+                    setSpeaking(false);
+                  }
+                  return next;
+                });
+              }}
+              disabled={configured !== true}
+              className={`!px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50 ${
+                speakReplies ? "btn-signal" : "btn-ghost"
+              }`}
+              aria-pressed={speakReplies}
+              title="Speak operator replies out loud"
+            >
+              {speakReplies ? "Speak on" : "Speak off"}
+            </button>
             <label className="flex min-w-0 flex-1 items-center gap-2">
               <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
                 wake
@@ -467,8 +511,10 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             {messages.length === 0 && configured === true ? (
               <p className="text-sm text-ink-soft">
                 {ambientEnabled
-                  ? `Ambient on — say “${wakeWord}” then your command. I’ll answer out loud.`
-                  : "Type, tap Mic, or enable Ambient for always-on wake word."}
+                  ? `Ambient on — say “${wakeWord}” then your command. Replies are spoken aloud.`
+                  : speakReplies
+                    ? "Type or tap Mic — replies are spoken aloud (Speak on)."
+                    : "Type, tap Mic, or enable Ambient. Turn Speak on to hear replies."}
               </p>
             ) : null}
 

@@ -263,4 +263,21 @@ export function speakText(text: string): Promise<void> {
 
 export const AMBIENT_STORAGE_KEY = "jarvis.ambient.enabled";
 export const WAKE_WORD_STORAGE_KEY = "jarvis.wake.word";
+export const SPEAK_REPLIES_STORAGE_KEY = "jarvis.speak.replies";
 export const DEFAULT_WAKE_WORD = "jarvis";
+
+/** Strip light markdown so TTS sounds less like source code. */
+export function textForSpeech(text: string) {
+  return text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
