@@ -49,7 +49,7 @@ function phaseLabel(
 export function ChatPanel({ projects }: { projects: Project[] }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const [projectId, setProjectId] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [ambientEnabled, setAmbientEnabled] = useState(false);
@@ -274,6 +274,27 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     if (touched) signalJobsChanged();
   }, [status, messages]);
 
+  // If a job targeted a named lane, switch the uplink dropdown to that lane.
+  useEffect(() => {
+    if (status !== "ready") return;
+    for (const message of [...messages].reverse()) {
+      for (const part of message.parts) {
+        if (!String(part.type).includes("start_job")) continue;
+        const output =
+          part && typeof part === "object" && "output" in part
+            ? (part as { output?: unknown }).output
+            : null;
+        if (!output || typeof output !== "object") continue;
+        const job = (output as { job?: { projectId?: string } }).job;
+        const nextId = job?.projectId?.trim();
+        if (nextId && nextId !== projectIdRef.current) {
+          setProjectId(nextId);
+          return;
+        }
+      }
+    }
+  }, [status, messages]);
+
   // Speak assistant replies that came from voice (ambient / mic).
   useEffect(() => {
     if (status !== "ready") return;
@@ -373,7 +394,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
               className="field !w-auto !py-1.5 !text-xs"
-              aria-label="Active lane"
+              aria-label="Soft-default lane (named lanes in chat win)"
             >
               <option value="">All lanes</option>
               {projects.map((project) => (

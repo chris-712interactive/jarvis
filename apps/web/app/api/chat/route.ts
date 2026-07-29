@@ -10,7 +10,7 @@ import {
   ensureConversation,
   listMessages,
 } from "@/lib/db/chat";
-import { getProject, seedIfEmpty } from "@/lib/db/queries";
+import { getProject, listProjects, seedIfEmpty } from "@/lib/db/queries";
 import { buildSystemPrompt, getChatModel, isChatConfigured } from "@/lib/chat/model";
 import { createOperatorTools } from "@/lib/chat/tools";
 
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
 
     const result = streamText({
       model: getChatModel(),
-      system: buildSystemPrompt(project),
+      system: buildSystemPrompt(project, await listProjects()),
       messages: modelMessages,
       tools: createOperatorTools(project?.id ?? null),
       stopWhen: stepCountIs(8),

@@ -9,6 +9,7 @@ import {
   listProjects,
 } from "@/lib/db/queries";
 import { kickJob } from "@/lib/jobs/runner";
+import { resolveLane } from "@/lib/chat/resolve-lane";
 import {
   listVaultNotes,
   readVaultNote,
@@ -23,6 +24,19 @@ function vaultErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Vault read failed";
 }
+
+const laneFields = {
+  lane: z
+    .string()
+    .optional()
+    .describe(
+      "Lane name/slug the user said (e.g. ForgeRep, Carline Dad). Prefer this over the UI dropdown whenever they named a lane.",
+    ),
+  projectId: z
+    .string()
+    .optional()
+    .describe("Exact project id when already known. Optional if lane is set."),
+};
 
 export function createOperatorTools(activeProjectId?: string | null) {
   return {
@@ -81,6 +95,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           .map((p) => ({
             id: p.id,
             name: p.name,
+            slug: p.slug,
             status: p.status,
             goal: p.goal,
             repoUrl: p.repoUrl,
@@ -92,27 +107,57 @@ export function createOperatorTools(activeProjectId?: string | null) {
       },
     }),
 
+    resolve_lane: tool({
+      description:
+        "Resolve a spoken/typed lane name (ForgeRep, Carline Dad, …) to a project id before starting work.",
+      inputSchema: z.object({
+        lane: z.string().min(1).describe("Lane name or nickname from the user"),
+      }),
+      execute: async ({ lane }) => {
+        const resolved = await resolveLane({ lane });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        return {
+          matchedBy: resolved.matchedBy,
+          project: {
+            id: resolved.project.id,
+            name: resolved.project.name,
+            slug: resolved.project.slug,
+            vaultPath: resolved.project.vaultPath,
+            status: resolved.project.status,
+          },
+        };
+      },
+    }),
+
     get_project: tool({
       description:
-        "Get one project lane by id, or the currently selected active project if no id is provided.",
-      inputSchema: z.object({
-        projectId: z
-          .string()
-          .optional()
-          .describe("Project id. Defaults to the active chat project."),
-      }),
-      execute: async ({ projectId }) => {
-        const id = projectId || activeProjectId;
-        if (!id) {
-          return { error: "No project selected. Ask which lane to inspect." };
+        "Get one project lane by id or lane name. Falls back to the UI dropdown only when neither is provided.",
+      inputSchema: z.object(laneFields),
+      execute: async ({ projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
         }
-        const project = await getProject(id);
-        if (!project) return { error: "Project not found" };
+        const project = resolved.project;
         const jobs = await listJobs({ projectId: project.id });
         return {
+          matchedBy: resolved.matchedBy,
           project: {
             id: project.id,
             name: project.name,
+            slug: project.slug,
             status: project.status,
             goal: project.goal,
             repoUrl: project.repoUrl,
@@ -135,17 +180,32 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     list_jobs: tool({
       description:
-        "List jobs, optionally filtered by project and/or status (queued, running, needs_you, done, failed).",
+        "List jobs, optionally filtered by lane name/id and/or status (queued, running, needs_you, done, failed).",
       inputSchema: z.object({
-        projectId: z.string().optional(),
+        ...laneFields,
         status: z
           .enum(["queued", "running", "needs_you", "done", "failed"])
           .optional(),
       }),
-      execute: async ({ projectId, status }) => {
-        const id = projectId || activeProjectId || undefined;
+      execute: async ({ projectId, lane, status }) => {
+        let scopedProjectId: string | undefined;
+        if (projectId || lane || activeProjectId) {
+          const resolved = await resolveLane({
+            projectId,
+            lane,
+            fallbackProjectId: activeProjectId,
+          });
+          if (!resolved.ok) {
+            return {
+              error: resolved.error,
+              candidates: resolved.candidates ?? null,
+            };
+          }
+          scopedProjectId = resolved.project.id;
+        }
+
         const jobs = await listJobs({
-          projectId: id,
+          projectId: scopedProjectId,
           status,
         });
         const projects = await listProjects();
@@ -194,7 +254,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     start_job: tool({
       description:
-        "Start an async background job for a project lane. Prefer this for research, ops, drafts, and coding missions that should continue while the user is busy. The job appears under In flight, then moves to Needs you or Recent when finished.",
+        "Start an async background job for a project lane. When the user names a lane, pass it as `lane` — do not rely on the UI dropdown. Prefer this for research, ops, drafts, and coding missions.",
       inputSchema: z.object({
         title: z.string().min(1).max(200).describe("Short job title"),
         brief: z
@@ -206,25 +266,32 @@ export function createOperatorTools(activeProjectId?: string | null) {
           .enum(jobKinds)
           .optional()
           .describe("code | research | ops | message. Defaults to ops."),
-        projectId: z
-          .string()
-          .optional()
-          .describe("Lane id. Defaults to the active chat project."),
+        ...laneFields,
         interruptLevel: z
           .enum(interruptLevels)
           .optional()
           .describe("How loudly to notify on completion. Defaults to digest."),
       }),
-      execute: async ({ title, brief, kind, projectId, interruptLevel }) => {
-        const id = projectId || activeProjectId;
-        if (!id) {
+      execute: async ({
+        title,
+        brief,
+        kind,
+        projectId,
+        lane,
+        interruptLevel,
+      }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
           return {
-            error:
-              "No project selected. Ask which lane owns this job, then call start_job again.",
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
           };
         }
-        const project = await getProject(id);
-        if (!project) return { error: "Project not found" };
+        const project = resolved.project;
 
         const job = await createJob({
           projectId: project.id,
@@ -240,6 +307,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
         return {
           started: true,
+          matchedBy: resolved.matchedBy,
           job: {
             id: (claimed ?? job).id,
             title: (claimed ?? job).title,
@@ -255,15 +323,15 @@ export function createOperatorTools(activeProjectId?: string | null) {
             (claimed ?? job).kind === "code"
               ? "Code jobs finish as needs_you until coding agents are wired."
               : project.vaultPath
-                ? "Job is in flight. When finished, a markdown note is written under Jarvis Jobs/ in this lane's vault."
-                : `Job is in flight, but "${project.name}" has no vault path — set one or the job will need you when it tries to write the note.`,
+                ? `Job is in flight on lane "${project.name}". When finished, a markdown note is written under Jarvis Jobs/ in that lane's vault.`
+                : `Job is in flight on lane "${project.name}", but that lane has no vault path — set one or the job will need you when it tries to write the note.`,
         };
       },
     }),
 
     write_vault_note: tool({
       description:
-        "Write or overwrite a markdown note in a project's Obsidian vault. Use for immediate short notes. For longer planning/research, prefer start_job so work shows under In flight and lands in Jarvis Jobs/.",
+        "Write or overwrite a markdown note in a project's Obsidian vault. Pass `lane` when the user named a lane. For longer planning/research, prefer start_job.",
       inputSchema: z.object({
         path: z
           .string()
@@ -271,14 +339,22 @@ export function createOperatorTools(activeProjectId?: string | null) {
           .max(240)
           .describe("Relative note path, e.g. Planning/Forge-social.md"),
         content: z.string().min(1).max(200_000).describe("Full markdown body"),
-        projectId: z.string().optional(),
+        ...laneFields,
         overwrite: z.boolean().optional().describe("Defaults to true"),
       }),
-      execute: async ({ path, content, projectId, overwrite }) => {
-        const id = projectId || activeProjectId;
-        if (!id) return { error: "No project selected." };
-        const project = await getProject(id);
-        if (!project) return { error: "Project not found" };
+      execute: async ({ path, content, projectId, lane, overwrite }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
         if (!project.vaultPath) {
           return {
             error: `Project "${project.name}" has no vault path configured.`,
@@ -290,6 +366,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           });
           return {
             written: true,
+            matchedBy: resolved.matchedBy,
             projectId: project.id,
             projectName: project.name,
             note: {
@@ -306,15 +383,21 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     list_vault_notes: tool({
       description:
-        "List markdown notes in a project's Obsidian vault. Defaults to the active project.",
-      inputSchema: z.object({
-        projectId: z.string().optional(),
-      }),
-      execute: async ({ projectId }) => {
-        const id = projectId || activeProjectId;
-        if (!id) return { error: "No project selected." };
-        const project = await getProject(id);
-        if (!project) return { error: "Project not found" };
+        "List markdown notes in a project's Obsidian vault. Pass `lane` when the user named a lane.",
+      inputSchema: z.object(laneFields),
+      execute: async ({ projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
         if (!project.vaultPath) {
           return {
             error: `Project "${project.name}" has no vault path configured.`,
@@ -325,6 +408,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
         try {
           const notes = listVaultNotes(project.vaultPath);
           return {
+            matchedBy: resolved.matchedBy,
             projectId: project.id,
             projectName: project.name,
             vaultPath: project.vaultPath,
@@ -338,16 +422,24 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     search_vault_notes: tool({
       description:
-        "Search markdown notes in a project's Obsidian vault for a query string.",
+        "Search markdown notes in a project's Obsidian vault for a query string. Pass `lane` when named.",
       inputSchema: z.object({
         query: z.string().min(2).describe("Text to search for in notes"),
-        projectId: z.string().optional(),
+        ...laneFields,
       }),
-      execute: async ({ query, projectId }) => {
-        const id = projectId || activeProjectId;
-        if (!id) return { error: "No project selected." };
-        const project = await getProject(id);
-        if (!project) return { error: "Project not found" };
+      execute: async ({ query, projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
         if (!project.vaultPath) {
           return {
             error: `Project "${project.name}" has no vault path configured.`,
@@ -356,6 +448,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
         try {
           const hits = searchVaultNotes(project.vaultPath, query);
           return {
+            matchedBy: resolved.matchedBy,
             projectId: project.id,
             projectName: project.name,
             query,
@@ -369,18 +462,26 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     read_vault_note: tool({
       description:
-        "Read one markdown note from a project's Obsidian vault by relative path.",
+        "Read one markdown note from a project's Obsidian vault by relative path. Pass `lane` when named.",
       inputSchema: z.object({
         path: z
           .string()
           .describe("Relative note path inside the vault, e.g. Home.md"),
-        projectId: z.string().optional(),
+        ...laneFields,
       }),
-      execute: async ({ path, projectId }) => {
-        const id = projectId || activeProjectId;
-        if (!id) return { error: "No project selected." };
-        const project = await getProject(id);
-        if (!project) return { error: "Project not found" };
+      execute: async ({ path, projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
         if (!project.vaultPath) {
           return {
             error: `Project "${project.name}" has no vault path configured.`,
@@ -389,6 +490,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
         try {
           const note = readVaultNote(project.vaultPath, path);
           return {
+            matchedBy: resolved.matchedBy,
             projectId: project.id,
             projectName: project.name,
             note,
