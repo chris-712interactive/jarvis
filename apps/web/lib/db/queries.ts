@@ -232,8 +232,8 @@ export async function seedIfEmpty() {
   const existing = await listProjects();
   if (existing.length > 0) return { seeded: false, count: existing.length };
 
-  const jarvis = await createProject({
-    name: "Jarvis",
+  const hub = await createProject({
+    name: "Command hub",
     goal: "Ship a command center for every active project with async agents.",
     repoUrl: "https://github.com/chris-712interactive/jarvis",
     notes: "Control plane + conversation + job tracking.",
@@ -256,7 +256,7 @@ export async function seedIfEmpty() {
   });
 
   await createJob({
-    projectId: jarvis.id,
+    projectId: hub.id,
     title: "Scaffold Phase 1 dashboard",
     kind: "code",
     status: "running",
@@ -265,7 +265,7 @@ export async function seedIfEmpty() {
   });
 
   await createJob({
-    projectId: jarvis.id,
+    projectId: hub.id,
     title: "Review architecture decisions",
     kind: "research",
     status: "needs_you",
