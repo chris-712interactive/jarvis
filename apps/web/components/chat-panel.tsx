@@ -9,6 +9,8 @@ import {
   AMBIENT_STORAGE_KEY,
   DEFAULT_WAKE_WORD,
   WAKE_WORD_STORAGE_KEY,
+  speakText,
+  stopSpeaking,
 } from "@/lib/speech/browser";
 import type { Project } from "@/lib/db/schema";
 
@@ -27,7 +29,13 @@ function toolLabel(partType: string) {
   return partType.replace(/^tool-/, "").replaceAll("_", " ");
 }
 
-function phaseLabel(phase: string, pushListening: boolean, busy: boolean) {
+function phaseLabel(
+  phase: string,
+  pushListening: boolean,
+  busy: boolean,
+  speaking: boolean,
+) {
+  if (speaking) return "speaking";
   if (busy) return "streaming";
   if (pushListening) return "listening";
   if (phase === "watching") return "ambient";
@@ -45,10 +53,15 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   const [ambientEnabled, setAmbientEnabled] = useState(false);
   const [wakeWord, setWakeWord] = useState(DEFAULT_WAKE_WORD);
   const [hydrated, setHydrated] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [pushListening, setPushListening] = useState(false);
 
   const projectIdRef = useRef(projectId);
   const conversationIdRef = useRef(conversationId);
   const busyRef = useRef(false);
+  const voiceOriginRef = useRef(false);
+  const lastSpokenIdRef = useRef<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const sendMessageRef = useRef<(payload: { text: string }) => Promise<void>>(
     async () => undefined,
   );
@@ -81,6 +94,16 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
         }),
         fetch: async (input, init) => {
           const response = await fetch(input, init);
+          if (!response.ok) {
+            let message = `Chat failed (${response.status})`;
+            try {
+              const data = await response.clone().json();
+              if (data?.error) message = String(data.error);
+            } catch {
+              // keep status message
+            }
+            throw new Error(message);
+          }
           const nextId = response.headers.get("X-Conversation-Id");
           if (nextId) {
             conversationIdRef.current = nextId;
@@ -93,14 +116,34 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   );
 
   const { messages, sendMessage, status, setMessages, error, clearError, stop } =
-    useChat({ transport });
+    useChat({
+      transport,
+      onError: (err) => {
+        console.error("[uplink]", err);
+        voiceOriginRef.current = false;
+      },
+    });
 
   const busy = status === "submitted" || status === "streaming";
   busyRef.current = busy;
   sendMessageRef.current = sendMessage;
   clearErrorRef.current = clearError;
 
-  const [pushListening, setPushListening] = useState(false);
+  async function dispatchVoiceCommand(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || busyRef.current || configured !== true) return;
+    voiceOriginRef.current = true;
+    setOpen(true);
+    setInput("");
+    clearErrorRef.current();
+    stopSpeaking();
+    try {
+      await sendMessageRef.current({ text: trimmed });
+    } catch (err) {
+      voiceOriginRef.current = false;
+      console.error("[uplink] send failed", err);
+    }
+  }
 
   const {
     supported: speechSupported,
@@ -110,20 +153,12 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     stop: stopMic,
   } = usePushToTalk({
     enabled:
-      open &&
-      configured !== false &&
-      !busy &&
-      !ambientEnabled &&
-      hydrated,
+      open && configured === true && !busy && !ambientEnabled && !speaking && hydrated,
     onTranscript: (text) => {
       setInput(text);
     },
     onComplete: (text) => {
-      const trimmed = text.trim();
-      if (!trimmed || busyRef.current || configured === false) return;
-      setInput("");
-      clearErrorRef.current();
-      void sendMessageRef.current({ text: trimmed });
+      void dispatchVoiceCommand(text);
     },
   });
 
@@ -137,8 +172,8 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     speechError: ambientError,
     listening: ambientListening,
   } = useWakeWordAmbient({
-    enabled: hydrated && ambientEnabled && configured !== false,
-    paused: busy || listening,
+    enabled: hydrated && ambientEnabled && configured === true,
+    paused: busy || listening || speaking,
     wakeWord,
     onWake: () => {
       setOpen(true);
@@ -147,12 +182,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
       setInput(text);
     },
     onCommand: (text) => {
-      const trimmed = text.trim();
-      if (!trimmed || busyRef.current || configured === false) return;
-      setOpen(true);
-      setInput("");
-      clearErrorRef.current();
-      void sendMessageRef.current({ text: trimmed });
+      void dispatchVoiceCommand(text);
     },
   });
 
@@ -210,6 +240,8 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     setMessages([]);
     clearError();
     stopMic({ send: false });
+    stopSpeaking();
+    voiceOriginRef.current = false;
   }, [projectId, setMessages, clearError, stopMic]);
 
   useEffect(() => {
@@ -220,18 +252,54 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     if (busy) stopMic({ send: false });
   }, [busy, stopMic]);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, busy, ambientPartial]);
+
+  // Speak assistant replies that came from voice (ambient / mic).
+  useEffect(() => {
+    if (status !== "ready") return;
+    if (!voiceOriginRef.current) return;
+
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    if (!lastAssistant || lastAssistant.id === lastSpokenIdRef.current) {
+      if (!lastAssistant) voiceOriginRef.current = false;
+      return;
+    }
+
+    const text = messageText(lastAssistant);
+    if (!text) {
+      // Tool-only / empty — don't leave the voice flag stuck forever.
+      voiceOriginRef.current = false;
+      return;
+    }
+
+    lastSpokenIdRef.current = lastAssistant.id;
+    voiceOriginRef.current = false;
+    setSpeaking(true);
+    void speakText(text).finally(() => setSpeaking(false));
+  }, [status, messages]);
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || configured !== true) return;
+    voiceOriginRef.current = false;
     stopMic({ send: false });
+    stopSpeaking();
     setInput("");
     clearError();
-    await sendMessage({ text });
+    try {
+      await sendMessage({ text });
+    } catch (err) {
+      console.error("[uplink] send failed", err);
+    }
   }
 
   function toggleAmbient() {
-    if (!speechSupported || configured === false) return;
+    if (!speechSupported || configured !== true) return;
     setAmbientEnabled((value) => {
       const next = !value;
       if (next) {
@@ -246,6 +314,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     ambientEnabled ? ambientPhase : "off",
     pushListening,
     busy,
+    speaking,
   );
 
   return (
@@ -301,7 +370,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             <button
               type="button"
               onClick={toggleAmbient}
-              disabled={configured === false || !speechSupported}
+              disabled={configured !== true || !speechSupported}
               className={`!px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50 ${
                 ambientEnabled ? "btn-signal" : "btn-ghost"
               }`}
@@ -323,7 +392,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                   )
                 }
                 className="field !py-1.5 !text-xs"
-                disabled={configured === false}
+                disabled={configured !== true}
                 aria-label="Wake word"
               />
             </label>
@@ -339,14 +408,15 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                   Add <span className="font-mono text-beam">OPENAI_API_KEY</span> to{" "}
                   <span className="font-mono text-beam">apps/web/.env.local</span>{" "}
                   and restart <span className="font-mono">npm run dev</span>.
+                  Wake word can hear you, but chat cannot answer without this key.
                 </p>
               </div>
             ) : null}
 
-            {messages.length === 0 && configured !== false ? (
+            {messages.length === 0 && configured === true ? (
               <p className="text-sm text-ink-soft">
                 {ambientEnabled
-                  ? `Ambient on — say “${wakeWord}” then your command.`
+                  ? `Ambient on — say “${wakeWord}” then your command. I’ll answer out loud.`
                   : "Type, tap Mic, or enable Ambient for always-on wake word."}
               </p>
             ) : null}
@@ -398,10 +468,20 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                     <p className="mt-2 whitespace-pre-wrap leading-relaxed text-ink">
                       {text}
                     </p>
+                  ) : message.role === "assistant" && busy ? (
+                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+                      compiling reply…
+                    </p>
                   ) : null}
                 </div>
               );
             })}
+
+            {busy && messages[messages.length - 1]?.role === "user" ? (
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-flight">
+                operator working…
+              </p>
+            ) : null}
 
             {error ? (
               <p className="text-sm text-signal">
@@ -417,11 +497,12 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                 Voice needs Chrome or Edge. Typing still works.
               </p>
             ) : null}
-            {ambientEnabled && ambientListening ? (
+            {ambientEnabled && ambientListening && !busy && !speaking ? (
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-flight">
                 mic live // watching for “{wakeWord}”
               </p>
             ) : null}
+            <div ref={messagesEndRef} />
           </div>
 
           <form onSubmit={onSubmit} className="border-t border-beam/20 p-3">
@@ -430,8 +511,9 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                 type="button"
                 onClick={toggleMic}
                 disabled={
-                  configured === false ||
+                  configured !== true ||
                   busy ||
+                  speaking ||
                   !speechSupported ||
                   ambientEnabled
                 }
@@ -462,7 +544,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                         ? "Ask about this lane…"
                         : "Ask across lanes…"
                 }
-                disabled={configured === false}
+                disabled={configured !== true}
               />
               {busy ? (
                 <button
@@ -477,8 +559,9 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                   type="submit"
                   disabled={
                     !input.trim() ||
-                    configured === false ||
+                    configured !== true ||
                     listening ||
+                    speaking ||
                     ambientPhase === "capturing"
                   }
                   className="btn-primary !px-3 !py-2 !text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"

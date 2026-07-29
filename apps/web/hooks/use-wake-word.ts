@@ -122,7 +122,7 @@ export function useWakeWordAmbient(options: Options) {
           onPartialCommandRef.current?.(extracted.command);
           setPhaseSafe("capturing");
           onWakeRef.current?.();
-          if (isFinal) scheduleCaptureFinalize();
+          scheduleCaptureFinalize();
           return;
         }
 
@@ -141,7 +141,7 @@ export function useWakeWordAmbient(options: Options) {
         onPartialCommandRef.current?.(command);
         setPhaseSafe("capturing");
         clearTimers();
-        if (isFinal) scheduleCaptureFinalize();
+        scheduleCaptureFinalize();
         return;
       }
 
@@ -153,7 +153,9 @@ export function useWakeWordAmbient(options: Options) {
         commandBufferRef.current = next;
         setPartial(next);
         onPartialCommandRef.current?.(next);
-        if (isFinal) scheduleCaptureFinalize();
+        // Restart silence timer on interim + final so we still send if Chrome
+        // never marks a final result.
+        scheduleCaptureFinalize();
       }
     },
     [armCapture, clearTimers, scheduleCaptureFinalize, setPhaseSafe],
@@ -229,6 +231,15 @@ export function useWakeWordAmbient(options: Options) {
     recognition.onend = () => {
       setListening(false);
       onListeningChangeRef.current?.(false);
+
+      // If Chrome ends the session mid-capture, flush the command.
+      if (
+        (phaseRef.current === "capturing" || phaseRef.current === "armed") &&
+        commandBufferRef.current.trim()
+      ) {
+        finishCommand();
+      }
+
       if (!wantListenRef.current) {
         setPhaseSafe("off");
         return;
@@ -270,7 +281,7 @@ export function useWakeWordAmbient(options: Options) {
       setListening(false);
       setPhaseSafe("off");
     }
-  }, [handleTranscript, setPhaseSafe]);
+  }, [handleTranscript, setPhaseSafe, finishCommand]);
 
   useEffect(() => {
     setSupported(Boolean(getSpeechRecognitionConstructor()));

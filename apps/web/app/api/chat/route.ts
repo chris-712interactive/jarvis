@@ -91,13 +91,15 @@ export async function POST(request: Request) {
     system: buildSystemPrompt(project),
     messages: await convertToModelMessages(messages),
     tools: createOperatorTools(project?.id ?? null),
-    stopWhen: stepCountIs(6),
+    stopWhen: stepCountIs(8),
+    temperature: 0.4,
     onFinish: async ({ text }) => {
-      if (!text.trim()) return;
+      const content = text.trim();
+      if (!content) return;
       await addMessage({
         conversationId: conversation.id,
         role: "assistant",
-        content: text.trim(),
+        content,
       });
     },
   });

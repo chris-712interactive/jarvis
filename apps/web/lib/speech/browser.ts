@@ -73,6 +73,31 @@ export function extractWakeCommand(
   return { heard: true, command };
 }
 
+export function stopSpeaking() {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+}
+
+/** Speak text via browser TTS. Returns a promise that resolves when done. */
+export function speakText(text: string): Promise<void> {
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    return Promise.resolve();
+  }
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return Promise.resolve();
+
+  stopSpeaking();
+
+  return new Promise((resolve) => {
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
 export const AMBIENT_STORAGE_KEY = "jarvis.ambient.enabled";
 export const WAKE_WORD_STORAGE_KEY = "jarvis.wake.word";
 export const DEFAULT_WAKE_WORD = "jarvis";
