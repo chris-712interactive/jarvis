@@ -28,6 +28,60 @@ function textFromUiMessage(message: UIMessage) {
     .trim();
 }
 
+function formatChatError(error: unknown): string {
+  if (error == null) return "Unknown chat error";
+  if (typeof error === "string") return error;
+
+  if (error instanceof Error) {
+    const enriched = error as Error & {
+      statusCode?: number;
+      responseBody?: string;
+      data?: { error?: { message?: string } } | { message?: string };
+      cause?: unknown;
+    };
+
+    const nested =
+      (typeof enriched.data === "object" &&
+        enriched.data &&
+        "error" in enriched.data &&
+        enriched.data.error?.message) ||
+      (typeof enriched.data === "object" &&
+        enriched.data &&
+        "message" in enriched.data &&
+        enriched.data.message) ||
+      null;
+
+    const parts = [
+      nested || enriched.message || "Chat error",
+      enriched.statusCode ? `HTTP ${enriched.statusCode}` : null,
+    ].filter(Boolean);
+
+    let message = parts.join(" — ");
+
+    // Common setup failures → actionable hints
+    const lower = message.toLowerCase();
+    if (lower.includes("incorrect api key") || lower.includes("invalid api key")) {
+      message +=
+        " Check OPENAI_API_KEY in apps/web/.env.local and restart npm run dev.";
+    } else if (lower.includes("model") && lower.includes("not found")) {
+      message +=
+        " Set OPENAI_MODEL in apps/web/.env.local to a model your key can use (e.g. gpt-4o-mini).";
+    } else if (lower.includes("quota") || lower.includes("billing")) {
+      message += " Your OpenAI account may need billing/credits.";
+    } else if (lower.includes("rate limit")) {
+      message += " Rate limited — wait a moment and try again.";
+    }
+
+    return message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Chat error";
+  }
+}
+
 export async function POST(request: Request) {
   await seedIfEmpty();
 
@@ -61,52 +115,77 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const conversation = await ensureConversation({
-    conversationId,
-    projectId: project?.id ?? null,
-    title: project ? `${project.name} chat` : "Command chat",
-  });
+  try {
+    const conversation = await ensureConversation({
+      conversationId,
+      projectId: project?.id ?? null,
+      title: project ? `${project.name} chat` : "Command chat",
+    });
 
-  const latestUser = [...messages].reverse().find((m) => m.role === "user");
-  if (latestUser) {
-    const content = textFromUiMessage(latestUser);
-    if (content) {
-      const existing = await listMessages(conversation.id);
-      const alreadySaved = existing.some(
-        (m) => m.role === "user" && m.content === content && m.id === latestUser.id,
-      );
-      if (!alreadySaved) {
-        await addMessage({
-          id: latestUser.id,
-          conversationId: conversation.id,
-          role: "user",
-          content,
-        });
+    const latestUser = [...messages].reverse().find((m) => m.role === "user");
+    if (latestUser) {
+      const content = textFromUiMessage(latestUser);
+      if (content) {
+        const existing = await listMessages(conversation.id);
+        const alreadySaved = existing.some(
+          (m) =>
+            m.role === "user" && m.content === content && m.id === latestUser.id,
+        );
+        if (!alreadySaved) {
+          await addMessage({
+            id: latestUser.id,
+            conversationId: conversation.id,
+            role: "user",
+            content,
+          });
+        }
       }
     }
+
+    let modelMessages;
+    try {
+      modelMessages = await convertToModelMessages(messages);
+    } catch (error) {
+      console.error("[chat] convertToModelMessages failed", error);
+      return NextResponse.json(
+        { error: `Could not parse chat messages: ${formatChatError(error)}` },
+        { status: 400 },
+      );
+    }
+
+    const result = streamText({
+      model: getChatModel(),
+      system: buildSystemPrompt(project),
+      messages: modelMessages,
+      tools: createOperatorTools(project?.id ?? null),
+      stopWhen: stepCountIs(8),
+      temperature: 0.4,
+      onError: ({ error }) => {
+        console.error("[chat] streamText error", error);
+      },
+      onFinish: async ({ text }) => {
+        const content = text.trim();
+        if (!content) return;
+        await addMessage({
+          conversationId: conversation.id,
+          role: "assistant",
+          content,
+        });
+      },
+    });
+
+    return result.toUIMessageStreamResponse({
+      headers: {
+        "X-Conversation-Id": conversation.id,
+      },
+      // AI SDK defaults to hiding details behind "An error occurred."
+      onError: formatChatError,
+    });
+  } catch (error) {
+    console.error("[chat] route failure", error);
+    return NextResponse.json(
+      { error: formatChatError(error) },
+      { status: 500 },
+    );
   }
-
-  const result = streamText({
-    model: getChatModel(),
-    system: buildSystemPrompt(project),
-    messages: await convertToModelMessages(messages),
-    tools: createOperatorTools(project?.id ?? null),
-    stopWhen: stepCountIs(8),
-    temperature: 0.4,
-    onFinish: async ({ text }) => {
-      const content = text.trim();
-      if (!content) return;
-      await addMessage({
-        conversationId: conversation.id,
-        role: "assistant",
-        content,
-      });
-    },
-  });
-
-  return result.toUIMessageStreamResponse({
-    headers: {
-      "X-Conversation-Id": conversation.id,
-    },
-  });
 }

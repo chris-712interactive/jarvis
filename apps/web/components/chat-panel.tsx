@@ -484,9 +484,14 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             ) : null}
 
             {error ? (
-              <p className="text-sm text-signal">
-                {error.message || "Uplink failed."}
-              </p>
+              <div className="hud-frame hud-frame-signal px-3 py-3 text-sm">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal">
+                  uplink error
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-ink">
+                  {error.message || "Uplink failed."}
+                </p>
+              </div>
             ) : null}
             {speechError ? <p className="text-sm text-signal">{speechError}</p> : null}
             {ambientError ? (

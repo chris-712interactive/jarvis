@@ -9,7 +9,7 @@ export function getChatModel() {
   if (!isChatConfigured()) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
-  const modelId = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+  const modelId = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
   return openai(modelId);
 }
 
