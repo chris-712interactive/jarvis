@@ -5,6 +5,7 @@ import {
   jobs,
   projects,
   type InterruptLevel,
+  type Job,
   type JobKind,
   type JobStatus,
   type ProjectStatus,
@@ -147,12 +148,19 @@ export async function listJobs(filters?: {
   return query.where(and(...conditions));
 }
 
+export async function getJob(id: string) {
+  const db = getDb();
+  const rows = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
 export type CreateJobInput = {
   projectId: string;
   title: string;
   kind?: JobKind;
   status?: JobStatus;
   summary?: string;
+  brief?: string;
   artifactUrl?: string | null;
   interruptLevel?: InterruptLevel;
 };
@@ -167,6 +175,7 @@ export async function createJob(input: CreateJobInput) {
     kind: input.kind ?? "ops",
     status: input.status ?? "queued",
     summary: input.summary?.trim() ?? "",
+    brief: input.brief?.trim() ?? "",
     artifactUrl: input.artifactUrl?.trim() || null,
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
@@ -176,23 +185,50 @@ export async function createJob(input: CreateJobInput) {
   return row;
 }
 
+export type UpdateJobInput = {
+  title?: string;
+  kind?: JobKind;
+  status?: JobStatus;
+  summary?: string;
+  brief?: string;
+  artifactUrl?: string | null;
+  interruptLevel?: InterruptLevel;
+};
+
+export async function updateJob(id: string, input: UpdateJobInput) {
+  const db = getDb();
+  const existing = await getJob(id);
+  if (!existing) return null;
+
+  const patch: Partial<Job> & { updatedAt: Date } = {
+    title: input.title?.trim() ?? existing.title,
+    kind: input.kind ?? existing.kind,
+    status: input.status ?? existing.status,
+    summary:
+      input.summary !== undefined ? input.summary.trim() : existing.summary,
+    brief: input.brief !== undefined ? input.brief.trim() : existing.brief,
+    artifactUrl:
+      input.artifactUrl !== undefined
+        ? input.artifactUrl?.trim() || null
+        : existing.artifactUrl,
+    interruptLevel: input.interruptLevel ?? existing.interruptLevel,
+    updatedAt: new Date(),
+  };
+
+  await db.update(jobs).set(patch).where(eq(jobs.id, id));
+  return { ...existing, ...patch };
+}
+
 export async function updateJobStatus(
   id: string,
   status: JobStatus,
   extras?: { summary?: string; artifactUrl?: string | null },
 ) {
-  const db = getDb();
-  const patch = {
+  return updateJob(id, {
     status,
     summary: extras?.summary,
     artifactUrl: extras?.artifactUrl,
-    updatedAt: new Date(),
-  };
-  // Remove undefined keys so we don't wipe fields
-  const clean = Object.fromEntries(
-    Object.entries(patch).filter(([, v]) => v !== undefined),
-  );
-  await db.update(jobs).set(clean).where(eq(jobs.id, id));
+  });
 }
 
 export async function getDashboardData() {
@@ -266,8 +302,9 @@ export async function seedIfEmpty() {
     projectId: hub.id,
     title: "Scaffold Phase 1 dashboard",
     kind: "code",
-    status: "running",
-    summary: "Project Hub + Needs you / In flight / Projects shell.",
+    status: "done",
+    summary: "Project Hub + Needs you / In flight / Projects shell shipped.",
+    brief: "Ship the Phase 1 dashboard shell.",
     interruptLevel: "digest",
   });
 
@@ -277,6 +314,7 @@ export async function seedIfEmpty() {
     kind: "research",
     status: "needs_you",
     summary: "Approve SQLite-for-now vs jump to Postgres, and auth choice.",
+    brief: "Decide storage and auth for the hub.",
     interruptLevel: "nudge",
   });
 
@@ -285,7 +323,8 @@ export async function seedIfEmpty() {
     title: "Draft weekly content outline",
     kind: "research",
     status: "queued",
-    summary: "Waiting for worker dispatch in Phase 3.",
+    summary: "Queued for local job runner.",
+    brief: "Outline next week's Carline Dad content themes and hooks.",
   });
 
   await createJob({
@@ -294,6 +333,7 @@ export async function seedIfEmpty() {
     kind: "ops",
     status: "done",
     summary: "Seed example of a finished ambient job.",
+    brief: "Scan personal ops for open loops.",
   });
 
   return { seeded: true, count: 3 };

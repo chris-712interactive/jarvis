@@ -7,27 +7,34 @@ An AI command center for everything you’re working on — with a conversationa
 - [Architecture & build guide](docs/ARCHITECTURE.md)
 - [Product contract](docs/PRODUCT.md)
 
-## Phase 1–2 (implemented)
+## Phase 1–3 (implemented)
 
 Project Hub + dashboard shell in `apps/web`:
 
-- SQLite + Drizzle schema for `projects`, `jobs`, `conversations`, `messages`
-- REST APIs under `/api/projects`, `/api/jobs`, `/api/chat`, `/api/conversations`
+- SQLite + Drizzle schema for `projects`, `jobs`, `conversations`, `messages`, `notifications`
+- REST APIs under `/api/projects`, `/api/jobs`, `/api/chat`, `/api/conversations`, `/api/notifications`
 - Dashboard lanes: **Needs you** / **In flight** / **Projects** / Recent outcomes
 - Create + edit projects
 - **Obsidian vault path per project** + read-only notes browse/search API
-- **Phase 2 chat uplink** grounded on a selected lane with read-only tools
+- **Phase 2 chat uplink** grounded on a selected lane
+- **Phase 3 async jobs** from chat → In flight → Needs you / Recent + in-app notifications
 
-### Chat (Phase 2)
+### Chat + async jobs (Phase 2–3)
 
 1. Copy `apps/web/.env.example` → `apps/web/.env.local`
 2. Set `OPENAI_API_KEY`
 3. `npm run dev` and click **Open uplink** on the command center
 4. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
+5. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
 
-Read-only tools available to the operator:
+Operator tools:
 - dashboard / project / job status
+- `start_job` / `get_job` (async workforce)
 - Obsidian list, search, and read for the active lane
+
+Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
+- `research` / `ops` / `message` → complete with a stub summary + notification
+- `code` → `needs_you` until real coding agents are wired
 
 ### Obsidian vaults (local memory)
 
@@ -61,6 +68,6 @@ npm run db:seed  # seed if empty
 
 1. ~~Project Hub + dashboard~~
 2. ~~Project-grounded chat (read-only tools)~~
-3. Async jobs + notifications
-4. Voice push-to-talk
+3. ~~Async jobs + notifications~~
+4. ~~Voice push-to-talk / ambient wake word~~
 5. Dispatch coding agents as workers

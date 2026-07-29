@@ -45,6 +45,7 @@ export const jobs = sqliteTable("jobs", {
   kind: text("kind").$type<JobKind>().notNull().default("ops"),
   status: text("status").$type<JobStatus>().notNull().default("queued"),
   summary: text("summary").notNull().default(""),
+  brief: text("brief").notNull().default(""),
   artifactUrl: text("artifact_url"),
   interruptLevel: text("interrupt_level")
     .$type<InterruptLevel>()
@@ -81,3 +82,18 @@ export const messages = sqliteTable("messages", {
 
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  jobId: text("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  body: text("body").notNull().default(""),
+  level: text("level").$type<InterruptLevel>().notNull().default("digest"),
+  read: integer("read", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type Notification = typeof notifications.$inferSelect;

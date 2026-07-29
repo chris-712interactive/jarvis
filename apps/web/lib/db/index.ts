@@ -16,13 +16,37 @@ declare global {
   var __jarvisDb: ReturnType<typeof drizzle<typeof schema>> | undefined;
 }
 
-function migrateProjectsTable(sqlite: Database.Database) {
-  const columns = sqlite
-    .prepare(`PRAGMA table_info(projects)`)
-    .all() as Array<{ name: string }>;
-  if (!columns.some((column) => column.name === "vault_path")) {
+function tableColumns(sqlite: Database.Database, table: string) {
+  return sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+}
+
+function migrateSchema(sqlite: Database.Database) {
+  const projectCols = tableColumns(sqlite, "projects");
+  if (!projectCols.some((column) => column.name === "vault_path")) {
     sqlite.exec(`ALTER TABLE projects ADD COLUMN vault_path TEXT`);
   }
+
+  const jobCols = tableColumns(sqlite, "jobs");
+  if (!jobCols.some((column) => column.name === "brief")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN brief TEXT NOT NULL DEFAULT ''`);
+  }
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+      job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      level TEXT NOT NULL DEFAULT 'digest',
+      read INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS notifications_read_idx ON notifications(read);
+    CREATE INDEX IF NOT EXISTS notifications_created_at_idx ON notifications(created_at);
+  `);
 }
 
 function createSqlite() {
@@ -53,6 +77,7 @@ function createSqlite() {
       kind TEXT NOT NULL DEFAULT 'ops',
       status TEXT NOT NULL DEFAULT 'queued',
       summary TEXT NOT NULL DEFAULT '',
+      brief TEXT NOT NULL DEFAULT '',
       artifact_url TEXT,
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,
@@ -75,13 +100,26 @@ function createSqlite() {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+      job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      level TEXT NOT NULL DEFAULT 'digest',
+      read INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS jobs_project_id_idx ON jobs(project_id);
     CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status);
     CREATE INDEX IF NOT EXISTS projects_status_idx ON projects(status);
     CREATE INDEX IF NOT EXISTS conversations_project_id_idx ON conversations(project_id);
     CREATE INDEX IF NOT EXISTS messages_conversation_id_idx ON messages(conversation_id);
+    CREATE INDEX IF NOT EXISTS notifications_read_idx ON notifications(read);
+    CREATE INDEX IF NOT EXISTS notifications_created_at_idx ON notifications(created_at);
   `);
-  migrateProjectsTable(sqlite);
+  migrateSchema(sqlite);
   return sqlite;
 }
 
@@ -89,7 +127,7 @@ function getSqlite() {
   if (!globalThis.__jarvisSqlite) {
     globalThis.__jarvisSqlite = createSqlite();
   } else {
-    migrateProjectsTable(globalThis.__jarvisSqlite);
+    migrateSchema(globalThis.__jarvisSqlite);
   }
   return globalThis.__jarvisSqlite;
 }

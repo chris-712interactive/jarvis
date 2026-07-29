@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/site-header";
 import { ChatPanel } from "@/components/chat-panel";
+import { JobPoller } from "@/components/job-poller";
 import {
   Hero,
   InFlightSection,
@@ -35,6 +36,7 @@ export default async function HomePage() {
   return (
     <>
       <SiteHeader />
+      <JobPoller hasInFlight={data.counts.inFlight > 0} />
       <main className="flex-1 pb-16">
         <Hero
           needsCount={data.counts.needsYou}
@@ -52,8 +54,8 @@ export default async function HomePage() {
       </main>
       <footer className="mx-auto w-full max-w-[1400px] px-5 pb-8 sm:px-8">
         <div className="flex items-center justify-between gap-4 border-t border-beam/15 pt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft">
-          <span>hub // phase 2 chat online</span>
-          <span>voice + agents next</span>
+          <span>hub // phase 3 async jobs online</span>
+          <span>coding agents next</span>
         </div>
       </footer>
       <ChatPanel projects={data.projects} />

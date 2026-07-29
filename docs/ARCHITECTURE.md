@@ -272,20 +272,19 @@ Write answers to:
 - Retrieval over project notes + recent GitHub activity
 - Read-only tools: summarize repo, list open PRs, “what’s blocked?”
 
-### Phase 3 — Async jobs (“while I’m busy”)
+### Phase 3 — Async jobs (“while I’m busy”) ✅
 
-- Job table + queue
-- “Start research / draft / coding agent” from chat
-- Poll/webhook status into dashboard
-- Notification channel (email or Telegram first)
-- Resume links
+- Job table + local runner (`queued → running → done|needs_you`)
+- `start_job` / `get_job` from chat
+- Dashboard poller + `/api/jobs/process`
+- In-app notifications (header Alerts); email/Telegram later
+- Resume via Needs you / Recent + job ids
 
-### Phase 4 — Voice & ambient
+### Phase 4 — Voice & ambient ✅ (browser)
 
-- Push-to-talk in web/PWA
-- Optional wake word later (hard; don’t block on it)
+- Push-to-talk in web
+- Ambient wake word (Web Speech)
 - Short spoken confirmations
-- Dictate → mission queue while offline-ish (store locally, sync)
 
 ### Phase 5 — Real workforce
 

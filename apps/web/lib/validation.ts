@@ -45,6 +45,21 @@ export const createJobSchema = z.object({
   kind: z.enum(jobKinds).optional().default("ops"),
   status: z.enum(jobStatuses).optional().default("queued"),
   summary: z.string().trim().max(2000).optional().default(""),
+  brief: z.string().trim().max(8000).optional().default(""),
   artifactUrl: optionalUrl,
   interruptLevel: z.enum(interruptLevels).optional().default("digest"),
+});
+
+export const updateJobSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(jobKinds).optional(),
+  status: z.enum(jobStatuses).optional(),
+  summary: z.string().trim().max(2000).optional(),
+  brief: z.string().trim().max(8000).optional(),
+  artifactUrl: optionalUrl,
+  interruptLevel: z.enum(interruptLevels).optional(),
+});
+
+export const updateNotificationSchema = z.object({
+  read: z.boolean(),
 });

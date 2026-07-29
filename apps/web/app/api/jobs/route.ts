@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createJob, listJobs, seedIfEmpty } from "@/lib/db/queries";
+import { createJob, getProject, listJobs, seedIfEmpty } from "@/lib/db/queries";
+import { kickJob, processQueuedJobs } from "@/lib/jobs/runner";
 import { createJobSchema } from "@/lib/validation";
 import type { JobStatus } from "@/lib/db/schema";
 
@@ -28,9 +29,20 @@ export async function POST(request: Request) {
     );
   }
 
+  const project = await getProject(parsed.data.projectId);
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
   const job = await createJob({
     ...parsed.data,
     artifactUrl: parsed.data.artifactUrl ?? null,
   });
-  return NextResponse.json({ job }, { status: 201 });
+
+  // Claim immediately so it shows in "In flight"
+  const claimed = await kickJob(job.id);
+  // Advance any ready completions from prior ticks
+  await processQueuedJobs();
+
+  return NextResponse.json({ job: claimed ?? job }, { status: 201 });
 }

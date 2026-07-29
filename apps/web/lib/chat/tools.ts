@@ -1,17 +1,21 @@
 import { tool } from "ai";
 import { z } from "zod";
 import {
+  createJob,
   getDashboardData,
+  getJob,
   getProject,
   listJobs,
   listProjects,
 } from "@/lib/db/queries";
+import { kickJob, processQueuedJobs } from "@/lib/jobs/runner";
 import {
   listVaultNotes,
   readVaultNote,
   searchVaultNotes,
   VaultError,
 } from "@/lib/vault/notes";
+import { jobKinds, interruptLevels } from "@/lib/db/schema";
 
 function vaultErrorMessage(error: unknown) {
   if (error instanceof VaultError) return error.message;
@@ -122,6 +126,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             kind: j.kind,
             status: j.status,
             summary: j.summary,
+            brief: j.brief,
           })),
         };
       },
@@ -150,10 +155,106 @@ export function createOperatorTools(activeProjectId?: string | null) {
           kind: j.kind,
           status: j.status,
           summary: j.summary,
+          brief: j.brief,
           projectId: j.projectId,
           projectName: byId.get(j.projectId) ?? null,
           updatedAt: j.updatedAt,
         }));
+      },
+    }),
+
+    get_job: tool({
+      description: "Get one job by id, including brief and latest status.",
+      inputSchema: z.object({
+        jobId: z.string().describe("Job id to inspect"),
+      }),
+      execute: async ({ jobId }) => {
+        const job = await getJob(jobId);
+        if (!job) return { error: "Job not found" };
+        const project = await getProject(job.projectId);
+        return {
+          job: {
+            id: job.id,
+            title: job.title,
+            kind: job.kind,
+            status: job.status,
+            summary: job.summary,
+            brief: job.brief,
+            interruptLevel: job.interruptLevel,
+            artifactUrl: job.artifactUrl,
+            updatedAt: job.updatedAt,
+          },
+          project: project
+            ? { id: project.id, name: project.name }
+            : null,
+        };
+      },
+    }),
+
+    start_job: tool({
+      description:
+        "Start an async background job for a project lane. Prefer this for research, ops, drafts, and coding missions that should continue while the user is busy. The job appears under In flight, then moves to Needs you or Recent when finished.",
+      inputSchema: z.object({
+        title: z.string().min(1).max(200).describe("Short job title"),
+        brief: z
+          .string()
+          .min(1)
+          .max(8000)
+          .describe("What the worker should accomplish"),
+        kind: z
+          .enum(jobKinds)
+          .optional()
+          .describe("code | research | ops | message. Defaults to ops."),
+        projectId: z
+          .string()
+          .optional()
+          .describe("Lane id. Defaults to the active chat project."),
+        interruptLevel: z
+          .enum(interruptLevels)
+          .optional()
+          .describe("How loudly to notify on completion. Defaults to digest."),
+      }),
+      execute: async ({ title, brief, kind, projectId, interruptLevel }) => {
+        const id = projectId || activeProjectId;
+        if (!id) {
+          return {
+            error:
+              "No project selected. Ask which lane owns this job, then call start_job again.",
+          };
+        }
+        const project = await getProject(id);
+        if (!project) return { error: "Project not found" };
+
+        const job = await createJob({
+          projectId: project.id,
+          title,
+          brief,
+          kind: kind ?? "ops",
+          status: "queued",
+          summary: "Queued for background worker.",
+          interruptLevel: interruptLevel ?? project.interruptLevel ?? "digest",
+        });
+
+        const claimed = await kickJob(job.id);
+        await processQueuedJobs();
+
+        return {
+          started: true,
+          job: {
+            id: (claimed ?? job).id,
+            title: (claimed ?? job).title,
+            kind: (claimed ?? job).kind,
+            status: (claimed ?? job).status,
+            summary: (claimed ?? job).summary,
+            brief: (claimed ?? job).brief,
+            projectId: project.id,
+            projectName: project.name,
+          },
+          note:
+            (claimed ?? job).kind === "code"
+              ? "Code jobs finish as needs_you until coding agents are wired. Research/ops/message complete via the local stub runner."
+              : "Job is in flight. Dashboard will refresh as the runner advances it.",
+        };
       },
     }),
 

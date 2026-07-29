@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NotificationsPanel } from "@/components/notifications-panel";
 
 export function SiteHeader() {
   return (
@@ -40,6 +41,7 @@ export function SiteHeader() {
           >
             Projects
           </Link>
+          <NotificationsPanel />
           <Link href="/projects/new" className="btn-ghost !px-3 !py-2 !text-[11px] uppercase tracking-[0.16em]">
             + Lane
           </Link>
