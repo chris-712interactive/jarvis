@@ -204,7 +204,11 @@ export function stopSpeaking() {
   window.speechSynthesis.cancel();
 }
 
-/** Speak text via browser TTS. Returns a promise that resolves when done. */
+/**
+ * Speak text via browser TTS.
+ * Chrome often stalls speechSynthesis and skips onend — keep a resume tick
+ * and a hard timeout so callers never stay locked in a "speaking" state.
+ */
 export function speakText(text: string): Promise<void> {
   if (typeof window === "undefined" || !window.speechSynthesis) {
     return Promise.resolve();
@@ -215,12 +219,45 @@ export function speakText(text: string): Promise<void> {
   stopSpeaking();
 
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearInterval(resumeTimer);
+      window.clearTimeout(failsafeTimer);
+      resolve();
+    };
+
     const utterance = new SpeechSynthesisUtterance(clean);
     utterance.rate = 1.05;
     utterance.pitch = 1;
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
+    utterance.onend = () => finish();
+    utterance.onerror = () => finish();
+
+    // Chrome bug: synthesis silently pauses unless periodically resumed.
+    const resumeTimer = window.setInterval(() => {
+      try {
+        if (window.speechSynthesis.paused || window.speechSynthesis.pending) {
+          window.speechSynthesis.resume();
+        }
+      } catch {
+        // ignore
+      }
+    }, 250);
+
+    // ~60ms/char + buffer, clamped so short questions still unlock quickly.
+    const ms = Math.min(45_000, Math.max(4_000, clean.length * 60 + 2_000));
+    const failsafeTimer = window.setTimeout(() => {
+      stopSpeaking();
+      finish();
+    }, ms);
+
+    try {
+      window.speechSynthesis.speak(utterance);
+      window.speechSynthesis.resume();
+    } catch {
+      finish();
+    }
   });
 }
 

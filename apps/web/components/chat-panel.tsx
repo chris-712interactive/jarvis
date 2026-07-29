@@ -236,15 +236,23 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     };
   }, []);
 
-  useEffect(() => {
+  function resetConversation() {
     conversationIdRef.current = null;
     setConversationId(null);
     setMessages([]);
     clearError();
     stopMic({ send: false });
     stopSpeaking();
+    setSpeaking(false);
     voiceOriginRef.current = false;
-  }, [projectId, setMessages, clearError, stopMic]);
+  }
+
+  function onProjectSelect(nextId: string) {
+    if (nextId === projectId) return;
+    setProjectId(nextId);
+    // Manual lane change starts a fresh thread.
+    resetConversation();
+  }
 
   useEffect(() => {
     if (!open) stopMic({ send: false });
@@ -288,6 +296,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
         const job = (output as { job?: { projectId?: string } }).job;
         const nextId = job?.projectId?.trim();
         if (nextId && nextId !== projectIdRef.current) {
+          // Keep the conversation — only sync the soft-default dropdown.
           setProjectId(nextId);
           return;
         }
@@ -318,7 +327,9 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     lastSpokenIdRef.current = lastAssistant.id;
     voiceOriginRef.current = false;
     setSpeaking(true);
-    void speakText(text).finally(() => setSpeaking(false));
+    void speakText(text)
+      .catch(() => undefined)
+      .finally(() => setSpeaking(false));
   }, [status, messages]);
 
   async function onSubmit(event: React.FormEvent) {
@@ -328,6 +339,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     voiceOriginRef.current = false;
     stopMic({ send: false });
     stopSpeaking();
+    setSpeaking(false);
     setInput("");
     clearError();
     try {
@@ -392,7 +404,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             </div>
             <select
               value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
+              onChange={(event) => onProjectSelect(event.target.value)}
               className="field !w-auto !py-1.5 !text-xs"
               aria-label="Soft-default lane (named lanes in chat win)"
             >
@@ -553,11 +565,15 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={toggleMic}
+                onClick={() => {
+                  // Interrupt TTS so a stuck "speaking" state cannot block replies.
+                  stopSpeaking();
+                  setSpeaking(false);
+                  toggleMic();
+                }}
                 disabled={
                   configured !== true ||
                   busy ||
-                  speaking ||
                   !speechSupported ||
                   ambientEnabled
                 }
@@ -578,15 +594,24 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               <input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
+                onFocus={() => {
+                  // If Ambient was mid-capture, let the user take over typing.
+                  if (speaking) {
+                    stopSpeaking();
+                    setSpeaking(false);
+                  }
+                }}
                 className="field !py-2"
                 placeholder={
                   ambientPhase === "capturing" || ambientPhase === "armed"
                     ? "Capturing command…"
                     : listening
                       ? "Listening…"
-                      : projectId
-                        ? "Ask about this lane…"
-                        : "Ask across lanes…"
+                      : speaking
+                        ? "Reply anytime…"
+                        : projectId
+                          ? "Ask about this lane…"
+                          : "Ask across lanes…"
                 }
                 disabled={configured !== true}
               />
@@ -604,9 +629,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                   disabled={
                     !input.trim() ||
                     configured !== true ||
-                    listening ||
-                    speaking ||
-                    ambientPhase === "capturing"
+                    listening
                   }
                   className="btn-primary !px-3 !py-2 !text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
                 >
