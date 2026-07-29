@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_WAKE_WORD,
+  appendSpeechFinal,
   extractWakeCommand,
   getSpeechRecognitionConstructor,
+  sanitizeVoiceCommand,
   type SpeechRecognitionLike,
 } from "@/lib/speech/browser";
 
@@ -34,7 +36,10 @@ export function useWakeWordAmbient(options: Options) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const wantListenRef = useRef(false);
   const phaseRef = useRef<AmbientPhase>("off");
-  const commandBufferRef = useRef("");
+  /** Committed finals only — never append interim hypotheses. */
+  const finalBufferRef = useRef("");
+  /** Latest interim hypothesis for the live utterance. */
+  const interimRef = useRef("");
   const captureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const armedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeWordRef = useRef(options.wakeWord || DEFAULT_WAKE_WORD);
@@ -71,11 +76,29 @@ export function useWakeWordAmbient(options: Options) {
     }
   }, []);
 
+  const clearBuffers = useCallback(() => {
+    finalBufferRef.current = "";
+    interimRef.current = "";
+    setPartial("");
+  }, []);
+
+  const publishLive = useCallback((finalText: string, interimText: string) => {
+    const live = sanitizeVoiceCommand(`${finalText} ${interimText}`.trim());
+    setPartial(live);
+    onPartialCommandRef.current?.(live);
+    return live;
+  }, []);
+
+  const liveCommand = useCallback(() => {
+    return sanitizeVoiceCommand(
+      `${finalBufferRef.current} ${interimRef.current}`.trim(),
+    );
+  }, []);
+
   const finishCommand = useCallback(() => {
     clearTimers();
-    const command = commandBufferRef.current.trim();
-    commandBufferRef.current = "";
-    setPartial("");
+    const command = liveCommand();
+    clearBuffers();
     if (command) {
       onCommandRef.current?.(command);
     }
@@ -84,20 +107,20 @@ export function useWakeWordAmbient(options: Options) {
     } else {
       setPhaseSafe("off");
     }
-  }, [clearTimers, setPhaseSafe]);
+  }, [clearBuffers, clearTimers, liveCommand, setPhaseSafe]);
 
   const armCapture = useCallback(() => {
     clearTimers();
+    clearBuffers();
     setPhaseSafe("armed");
     onWakeRef.current?.();
     armedTimerRef.current = setTimeout(() => {
       if (phaseRef.current === "armed") {
-        commandBufferRef.current = "";
-        setPartial("");
+        clearBuffers();
         setPhaseSafe(wantListenRef.current ? "watching" : "off");
       }
     }, ARMED_TIMEOUT_MS);
-  }, [clearTimers, setPhaseSafe]);
+  }, [clearBuffers, clearTimers, setPhaseSafe]);
 
   const scheduleCaptureFinalize = useCallback(() => {
     if (captureTimerRef.current) clearTimeout(captureTimerRef.current);
@@ -106,23 +129,40 @@ export function useWakeWordAmbient(options: Options) {
     }, CAPTURE_SILENCE_MS);
   }, [finishCommand]);
 
+  const beginCapturing = useCallback(
+    (seed: string, isFinal: boolean) => {
+      const cleaned = seed.trim();
+      if (!cleaned) return;
+      if (isFinal) {
+        finalBufferRef.current = appendSpeechFinal("", cleaned);
+        interimRef.current = "";
+      } else {
+        finalBufferRef.current = "";
+        interimRef.current = cleaned;
+      }
+      publishLive(finalBufferRef.current, interimRef.current);
+      setPhaseSafe("capturing");
+      clearTimers();
+      scheduleCaptureFinalize();
+    },
+    [clearTimers, publishLive, scheduleCaptureFinalize, setPhaseSafe],
+  );
+
   const handleTranscript = useCallback(
     (transcript: string, isFinal: boolean) => {
       if (pausedRef.current) return;
       const wakeWord = wakeWordRef.current;
       const current = phaseRef.current;
+      const chunk = transcript.trim();
+      if (!chunk) return;
 
       if (current === "watching") {
-        const extracted = extractWakeCommand(transcript, wakeWord);
+        const extracted = extractWakeCommand(chunk, wakeWord);
         if (!extracted.heard) return;
 
         if (extracted.command) {
-          commandBufferRef.current = extracted.command;
-          setPartial(extracted.command);
-          onPartialCommandRef.current?.(extracted.command);
-          setPhaseSafe("capturing");
           onWakeRef.current?.();
-          scheduleCaptureFinalize();
+          beginCapturing(extracted.command, isFinal);
           return;
         }
 
@@ -131,41 +171,43 @@ export function useWakeWordAmbient(options: Options) {
       }
 
       if (current === "armed") {
-        const extracted = extractWakeCommand(transcript, wakeWord);
-        const command = extracted.heard
-          ? extracted.command
-          : transcript.trim();
+        const extracted = extractWakeCommand(chunk, wakeWord);
+        const command = extracted.heard ? extracted.command : chunk;
         if (!command) return;
-        commandBufferRef.current = command;
-        setPartial(command);
-        onPartialCommandRef.current?.(command);
-        setPhaseSafe("capturing");
-        clearTimers();
-        scheduleCaptureFinalize();
+        beginCapturing(command, isFinal);
         return;
       }
 
       if (current === "capturing") {
-        const extracted = extractWakeCommand(transcript, wakeWord);
-        const next = extracted.heard
-          ? extracted.command || commandBufferRef.current
-          : `${commandBufferRef.current} ${transcript}`.trim();
-        commandBufferRef.current = next;
-        setPartial(next);
-        onPartialCommandRef.current?.(next);
-        // Restart silence timer on interim + final so we still send if Chrome
-        // never marks a final result.
+        const extracted = extractWakeCommand(chunk, wakeWord);
+        const spoken = extracted.heard ? extracted.command : chunk;
+        if (!spoken) {
+          scheduleCaptureFinalize();
+          return;
+        }
+
+        if (isFinal) {
+          finalBufferRef.current = appendSpeechFinal(
+            finalBufferRef.current,
+            spoken,
+          );
+          interimRef.current = "";
+        } else {
+          // Replace interim hypothesis — do not append (Chrome stutter source).
+          interimRef.current = spoken;
+        }
+
+        publishLive(finalBufferRef.current, interimRef.current);
         scheduleCaptureFinalize();
       }
     },
-    [armCapture, clearTimers, scheduleCaptureFinalize, setPhaseSafe],
+    [armCapture, beginCapturing, publishLive, scheduleCaptureFinalize],
   );
 
   const stop = useCallback(() => {
     wantListenRef.current = false;
     clearTimers();
-    commandBufferRef.current = "";
-    setPartial("");
+    clearBuffers();
     const recognition = recognitionRef.current;
     if (recognition) {
       try {
@@ -178,7 +220,7 @@ export function useWakeWordAmbient(options: Options) {
     setListening(false);
     onListeningChangeRef.current?.(false);
     setPhaseSafe("off");
-  }, [clearTimers, setPhaseSafe]);
+  }, [clearBuffers, clearTimers, setPhaseSafe]);
 
   const start = useCallback(() => {
     setSpeechError(null);
@@ -202,8 +244,7 @@ export function useWakeWordAmbient(options: Options) {
     recognition.interimResults = true;
     recognition.lang = "en-US";
     wantListenRef.current = true;
-    commandBufferRef.current = "";
-    setPartial("");
+    clearBuffers();
     setPhaseSafe("watching");
 
     recognition.onresult = (event) => {
@@ -235,7 +276,7 @@ export function useWakeWordAmbient(options: Options) {
       // If Chrome ends the session mid-capture, flush the command.
       if (
         (phaseRef.current === "capturing" || phaseRef.current === "armed") &&
-        commandBufferRef.current.trim()
+        liveCommand()
       ) {
         finishCommand();
       }
@@ -281,7 +322,13 @@ export function useWakeWordAmbient(options: Options) {
       setListening(false);
       setPhaseSafe("off");
     }
-  }, [handleTranscript, setPhaseSafe, finishCommand]);
+  }, [
+    clearBuffers,
+    finishCommand,
+    handleTranscript,
+    liveCommand,
+    setPhaseSafe,
+  ]);
 
   useEffect(() => {
     setSupported(Boolean(getSpeechRecognitionConstructor()));
@@ -299,13 +346,20 @@ export function useWakeWordAmbient(options: Options) {
     // Paused (e.g. model streaming): keep mic session but drop in-flight capture.
     if (options.paused && wantListenRef.current) {
       clearTimers();
-      commandBufferRef.current = "";
-      setPartial("");
+      clearBuffers();
       if (phaseRef.current !== "watching" && phaseRef.current !== "off") {
         setPhaseSafe("watching");
       }
     }
-  }, [options.enabled, options.paused, start, stop, clearTimers, setPhaseSafe]);
+  }, [
+    options.enabled,
+    options.paused,
+    start,
+    stop,
+    clearTimers,
+    clearBuffers,
+    setPhaseSafe,
+  ]);
 
   useEffect(() => {
     return () => stop();

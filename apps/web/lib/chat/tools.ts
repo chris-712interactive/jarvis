@@ -8,11 +8,12 @@ import {
   listJobs,
   listProjects,
 } from "@/lib/db/queries";
-import { kickJob, processQueuedJobs } from "@/lib/jobs/runner";
+import { kickJob } from "@/lib/jobs/runner";
 import {
   listVaultNotes,
   readVaultNote,
   searchVaultNotes,
+  writeVaultNote,
   VaultError,
 } from "@/lib/vault/notes";
 import { jobKinds, interruptLevels } from "@/lib/db/schema";
@@ -236,7 +237,6 @@ export function createOperatorTools(activeProjectId?: string | null) {
         });
 
         const claimed = await kickJob(job.id);
-        await processQueuedJobs();
 
         return {
           started: true,
@@ -249,12 +249,58 @@ export function createOperatorTools(activeProjectId?: string | null) {
             brief: (claimed ?? job).brief,
             projectId: project.id,
             projectName: project.name,
+            vaultPath: project.vaultPath,
           },
           note:
             (claimed ?? job).kind === "code"
-              ? "Code jobs finish as needs_you until coding agents are wired. Research/ops/message complete via the local stub runner."
-              : "Job is in flight. Dashboard will refresh as the runner advances it.",
+              ? "Code jobs finish as needs_you until coding agents are wired."
+              : project.vaultPath
+                ? "Job is in flight. When finished, a markdown note is written under Jarvis Jobs/ in this lane's vault."
+                : `Job is in flight, but "${project.name}" has no vault path — set one or the job will need you when it tries to write the note.`,
         };
+      },
+    }),
+
+    write_vault_note: tool({
+      description:
+        "Write or overwrite a markdown note in a project's Obsidian vault. Use for immediate short notes. For longer planning/research, prefer start_job so work shows under In flight and lands in Jarvis Jobs/.",
+      inputSchema: z.object({
+        path: z
+          .string()
+          .min(1)
+          .max(240)
+          .describe("Relative note path, e.g. Planning/Forge-social.md"),
+        content: z.string().min(1).max(200_000).describe("Full markdown body"),
+        projectId: z.string().optional(),
+        overwrite: z.boolean().optional().describe("Defaults to true"),
+      }),
+      execute: async ({ path, content, projectId, overwrite }) => {
+        const id = projectId || activeProjectId;
+        if (!id) return { error: "No project selected." };
+        const project = await getProject(id);
+        if (!project) return { error: "Project not found" };
+        if (!project.vaultPath) {
+          return {
+            error: `Project "${project.name}" has no vault path configured.`,
+          };
+        }
+        try {
+          const note = writeVaultNote(project.vaultPath, path, content, {
+            overwrite: overwrite !== false,
+          });
+          return {
+            written: true,
+            projectId: project.id,
+            projectName: project.name,
+            note: {
+              path: note.path,
+              title: note.title,
+              bytes: note.bytes,
+            },
+          };
+        } catch (error) {
+          return { error: vaultErrorMessage(error) };
+        }
       },
     }),
 

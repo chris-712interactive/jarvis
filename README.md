@@ -33,8 +33,11 @@ Operator tools:
 - Obsidian list, search, and read for the active lane
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
-- `research` / `ops` / `message` → complete with a stub summary + notification
+- `research` / `ops` / `message` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
 - `code` → `needs_you` until real coding agents are wired
+- Missing vault path → job lands in **Needs you** with a configure-vault message
+
+Chat can also call `write_vault_note` for short immediate writes (`POST /api/projects/:id/notes/write`).
 
 ### Obsidian vaults (local memory)
 

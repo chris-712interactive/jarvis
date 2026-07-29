@@ -620,6 +620,13 @@ export function RecentSection({ jobs }: { jobs: JobWithProject[] }) {
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
                 {job.project?.name ?? "Project"} · {formatRelative(job.updatedAt)}
               </p>
+              {job.artifactUrl ? (
+                <p className="mt-1 font-mono text-[11px] text-flight">
+                  vault // {job.artifactUrl}
+                </p>
+              ) : job.summary ? (
+                <p className="mt-1 text-xs text-ink-soft line-clamp-2">{job.summary}</p>
+              ) : null}
             </div>
           </li>
         ))}

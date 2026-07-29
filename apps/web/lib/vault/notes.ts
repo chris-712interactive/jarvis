@@ -293,3 +293,68 @@ export function searchVaultNotes(
 
   return hits;
 }
+
+const MAX_WRITE_BYTES = 200_000;
+
+function normalizeNoteRelativePath(relativePath: string) {
+  const cleaned = relativePath.replace(/^[/\\]+/, "").trim().replace(/\\/g, "/");
+  if (!cleaned) {
+    throw new VaultError("Note path is required", 400);
+  }
+  if (cleaned.includes("..")) {
+    throw new VaultError("Note path cannot contain ..", 400);
+  }
+  const withExt = MARKDOWN_EXT.has(path.extname(cleaned).toLowerCase())
+    ? cleaned
+    : `${cleaned}.md`;
+  return withExt;
+}
+
+/**
+ * Create or overwrite a markdown note inside a project vault.
+ * Paths are sandboxed to the vault root.
+ */
+export function writeVaultNote(
+  vaultPath: string | null | undefined,
+  relativePath: string,
+  content: string,
+  options?: { overwrite?: boolean },
+): VaultNote {
+  const root = ensureVaultDir(vaultPath);
+  const cleaned = normalizeNoteRelativePath(relativePath);
+  const absolute = path.resolve(root, cleaned);
+  assertInsideVault(root, absolute);
+
+  if (!isMarkdownFile(absolute)) {
+    throw new VaultError("Only markdown notes can be written", 400);
+  }
+
+  const overwrite = options?.overwrite !== false;
+  if (!overwrite && fs.existsSync(absolute)) {
+    throw new VaultError("Note already exists", 409);
+  }
+
+  const body = content ?? "";
+  const bytes = Buffer.byteLength(body, "utf8");
+  if (bytes > MAX_WRITE_BYTES) {
+    throw new VaultError(
+      `Note exceeds ${MAX_WRITE_BYTES} byte write limit`,
+      400,
+    );
+  }
+
+  fs.mkdirSync(path.dirname(absolute), { recursive: true });
+  fs.writeFileSync(absolute, body, "utf8");
+  return readVaultNote(vaultPath, cleaned);
+}
+
+/** Build a safe relative path under Jarvis Jobs/ for async outputs. */
+export function jobNotePath(title: string, at = new Date()) {
+  const stamp = at.toISOString().slice(0, 10);
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || "job";
+  return `Jarvis Jobs/${stamp}-${slug}.md`;
+}

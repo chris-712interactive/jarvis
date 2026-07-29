@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getSpeechRecognitionConstructor,
+  sanitizeVoiceCommand,
   type SpeechRecognitionLike,
 } from "@/lib/speech/browser";
 
@@ -78,14 +79,14 @@ export function usePushToTalk(options: {
         const result = event.results[i];
         const chunk = result[0]?.transcript ?? "";
         if (result.isFinal) {
-          finals = `${finals} ${chunk}`.trim();
+          finals = sanitizeVoiceCommand(`${finals} ${chunk}`.trim());
           finalBufferRef.current = finals;
           onTranscriptRef.current(finals, { final: true });
         } else {
           interim += chunk;
         }
       }
-      const live = `${finals} ${interim}`.trim();
+      const live = sanitizeVoiceCommand(`${finals} ${interim}`.trim());
       if (live) onTranscriptRef.current(live, { final: false });
     };
 
@@ -102,7 +103,7 @@ export function usePushToTalk(options: {
 
     recognition.onend = () => {
       setListening(false);
-      const text = finalBufferRef.current.trim();
+      const text = sanitizeVoiceCommand(finalBufferRef.current.trim());
       if (wantListenRef.current) {
         try {
           recognition.start();

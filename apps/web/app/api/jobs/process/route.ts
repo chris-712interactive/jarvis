@@ -3,6 +3,7 @@ import { seedIfEmpty } from "@/lib/db/queries";
 import { processQueuedJobs } from "@/lib/jobs/runner";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 async function tick() {
   await seedIfEmpty();
@@ -10,7 +11,7 @@ async function tick() {
   return NextResponse.json({ ok: true, ...result });
 }
 
-/** Advance the local job runner (queued → running → done/needs_you). */
+/** Advance the local job runner (queued → running → done|needs_you + vault write). */
 export async function POST() {
   return tick();
 }

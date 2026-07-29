@@ -47,6 +47,132 @@ export function normalizeSpeech(text: string) {
     .trim();
 }
 
+/** Merge a new final STT chunk without duplicating overlapping text. */
+export function appendSpeechFinal(buffer: string, chunk: string) {
+  const existing = buffer.replace(/\s+/g, " ").trim();
+  const next = chunk.replace(/\s+/g, " ").trim();
+  if (!next) return existing;
+  if (!existing) return next;
+
+  const existingLower = existing.toLowerCase();
+  const nextLower = next.toLowerCase();
+  if (existingLower === nextLower) return existing;
+  if (existingLower.endsWith(nextLower)) return existing;
+  if (nextLower.startsWith(existingLower)) return next;
+  if (existingLower.includes(nextLower) && next.split(/\s+/).length >= 3) {
+    return existing;
+  }
+  return `${existing} ${next}`.trim();
+}
+
+function sameWordsIgnoreCase(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i].toLowerCase() !== b[i].toLowerCase()) return false;
+  }
+  return true;
+}
+
+/**
+ * Collapse Chrome Web Speech stutter loops like
+ * "for Forge for Forge for Forge I need I need …"
+ */
+export function collapseSpeechRepeats(text: string) {
+  const raw = text.replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+
+  // Drop consecutive duplicate words first.
+  const words: string[] = [];
+  for (const word of raw.split(" ")) {
+    if (!word) continue;
+    if (
+      words.length > 0 &&
+      words[words.length - 1].toLowerCase() === word.toLowerCase()
+    ) {
+      continue;
+    }
+    words.push(word);
+  }
+
+  let arr = words;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const maxN = Math.min(20, Math.floor(arr.length / 2));
+    for (let n = maxN; n >= 2; n -= 1) {
+      const next: string[] = [];
+      let i = 0;
+      while (i < arr.length) {
+        if (i + 2 * n <= arr.length) {
+          const phrase = arr.slice(i, i + n);
+          let repeats = 1;
+          while (
+            i + (repeats + 1) * n <= arr.length &&
+            sameWordsIgnoreCase(
+              phrase,
+              arr.slice(i + repeats * n, i + (repeats + 1) * n),
+            )
+          ) {
+            repeats += 1;
+          }
+          if (repeats > 1) {
+            next.push(...phrase);
+            i += repeats * n;
+            changed = true;
+            continue;
+          }
+        }
+        next.push(arr[i]);
+        i += 1;
+      }
+      arr = next;
+      if (changed) break;
+    }
+  }
+
+  // STT often restarts mid-sentence leaving near-duplicate spans, not only adjacent loops.
+  arr = collapseDistantPhraseRepeats(arr);
+
+  if (arr.length > 48) {
+    const unique = new Set(arr.map((word) => word.toLowerCase()));
+    if (unique.size / arr.length < 0.35) {
+      arr = arr.slice(0, 48);
+    }
+  }
+
+  return arr.join(" ").trim();
+}
+
+/** Remove a later copy of a long phrase when STT echoed the same request again. */
+function collapseDistantPhraseRepeats(words: string[]) {
+  let arr = words;
+  let guard = 0;
+  while (guard < 8) {
+    guard += 1;
+    let removed = false;
+    const maxLen = Math.min(24, Math.floor(arr.length / 2));
+    outer: for (let len = maxLen; len >= 5; len -= 1) {
+      for (let i = 0; i + len < arr.length; i += 1) {
+        const phrase = arr.slice(i, i + len);
+        for (let j = i + len; j + len <= arr.length; j += 1) {
+          if (sameWordsIgnoreCase(phrase, arr.slice(j, j + len))) {
+            arr = [...arr.slice(0, j), ...arr.slice(j + len)];
+            removed = true;
+            break outer;
+          }
+        }
+      }
+    }
+    if (!removed) break;
+  }
+  return arr;
+}
+
+/** Final cleanup before a voice command is sent to chat. */
+export function sanitizeVoiceCommand(text: string) {
+  return collapseSpeechRepeats(text);
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

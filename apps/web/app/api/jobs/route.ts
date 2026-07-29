@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createJob, getProject, listJobs, seedIfEmpty } from "@/lib/db/queries";
-import { kickJob, processQueuedJobs } from "@/lib/jobs/runner";
+import { kickJob } from "@/lib/jobs/runner";
 import { createJobSchema } from "@/lib/validation";
 import type { JobStatus } from "@/lib/db/schema";
 
@@ -39,10 +39,8 @@ export async function POST(request: Request) {
     artifactUrl: parsed.data.artifactUrl ?? null,
   });
 
-  // Claim immediately so it shows in "In flight"
+  // Claim immediately so it shows in "In flight"; poller finishes + writes vault.
   const claimed = await kickJob(job.id);
-  // Advance any ready completions from prior ticks
-  await processQueuedJobs();
 
   return NextResponse.json({ job: claimed ?? job }, { status: 201 });
 }

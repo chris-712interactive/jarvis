@@ -5,10 +5,12 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePushToTalk } from "@/hooks/use-push-to-talk";
 import { useWakeWordAmbient } from "@/hooks/use-wake-word";
+import { signalJobsChanged } from "@/components/job-poller";
 import {
   AMBIENT_STORAGE_KEY,
   DEFAULT_WAKE_WORD,
   WAKE_WORD_STORAGE_KEY,
+  sanitizeVoiceCommand,
   speakText,
   stopSpeaking,
 } from "@/lib/speech/browser";
@@ -130,7 +132,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   clearErrorRef.current = clearError;
 
   async function dispatchVoiceCommand(text: string) {
-    const trimmed = text.trim();
+    const trimmed = sanitizeVoiceCommand(text);
     if (!trimmed || busyRef.current || configured !== true) return;
     voiceOriginRef.current = true;
     setOpen(true);
@@ -255,6 +257,22 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, busy, ambientPartial]);
+
+  // After tool turns that touch jobs/vault, nudge the dashboard poller immediately.
+  useEffect(() => {
+    if (status !== "ready") return;
+    const touched = messages.some((message) =>
+      message.parts.some((part) => {
+        const type = String(part.type);
+        return (
+          type.includes("start_job") ||
+          type.includes("write_vault_note") ||
+          type.includes("get_job")
+        );
+      }),
+    );
+    if (touched) signalJobsChanged();
+  }, [status, messages]);
 
   // Speak assistant replies that came from voice (ambient / mic).
   useEffect(() => {
