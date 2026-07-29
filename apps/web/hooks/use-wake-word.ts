@@ -160,6 +160,7 @@ export function useWakeWordAmbient(options: Options) {
         const extracted = extractWakeCommand(chunk, wakeWord);
         if (!extracted.heard) return;
 
+        // Strip only this first leading wake word; later "Jarvis" stays in the command.
         if (extracted.command) {
           onWakeRef.current?.();
           beginCapturing(extracted.command, isFinal);
@@ -171,30 +172,21 @@ export function useWakeWordAmbient(options: Options) {
       }
 
       if (current === "armed") {
-        const extracted = extractWakeCommand(chunk, wakeWord);
-        const command = extracted.heard ? extracted.command : chunk;
-        if (!command) return;
-        beginCapturing(command, isFinal);
+        // Wake already consumed — keep the full spoken text, including the wake word.
+        beginCapturing(chunk, isFinal);
         return;
       }
 
       if (current === "capturing") {
-        const extracted = extractWakeCommand(chunk, wakeWord);
-        const spoken = extracted.heard ? extracted.command : chunk;
-        if (!spoken) {
-          scheduleCaptureFinalize();
-          return;
-        }
-
+        // Do not strip wake word again mid-command / follow-up speech.
         if (isFinal) {
           finalBufferRef.current = appendSpeechFinal(
             finalBufferRef.current,
-            spoken,
+            chunk,
           );
           interimRef.current = "";
         } else {
-          // Replace interim hypothesis — do not append (Chrome stutter source).
-          interimRef.current = spoken;
+          interimRef.current = chunk;
         }
 
         publishLive(finalBufferRef.current, interimRef.current);

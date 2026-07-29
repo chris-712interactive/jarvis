@@ -177,7 +177,7 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Detect wake phrase and any command text after it. */
+/** Detect a leading wake phrase and any command text after it. */
 export function extractWakeCommand(
   transcript: string,
   wakeWord = "jarvis",
@@ -186,16 +186,17 @@ export function extractWakeCommand(
   if (!normalized) return { heard: false, command: "" };
 
   const word = escapeRegExp(normalizeSpeech(wakeWord) || "jarvis");
+  // Only the leading wake counts — later "Jarvis" in the sentence stays intact.
   const pattern = new RegExp(
-    `\\b(?:(?:hey|ok|okay|hi)\\s+)?${word}\\b`,
+    `^(?:(?:hey|ok|okay|hi)\\s+)?${word}\\b`,
     "i",
   );
   const match = pattern.exec(normalized);
-  if (!match || match.index === undefined) {
+  if (!match) {
     return { heard: false, command: "" };
   }
 
-  const command = normalized.slice(match.index + match[0].length).trim();
+  const command = normalized.slice(match[0].length).trim();
   return { heard: true, command };
 }
 
