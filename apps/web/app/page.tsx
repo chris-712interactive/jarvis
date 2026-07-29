@@ -15,14 +15,31 @@ export default async function HomePage() {
   await seedIfEmpty();
   const data = await getDashboardData();
 
+  const topProject = data.needsYou.projects[0];
+  const topJob = data.needsYou.jobs[0];
+  const topAlert = topProject
+    ? {
+        title: topProject.name,
+        detail: topProject.needsYou ?? "Requires a decision.",
+        href: `/projects/${topProject.id}`,
+      }
+    : topJob
+      ? {
+          title: topJob.title,
+          detail: topJob.summary || "Needs a decision.",
+          href: topJob.project ? `/projects/${topJob.project.id}` : undefined,
+        }
+      : undefined;
+
   return (
     <>
       <SiteHeader />
-      <main className="flex-1 pb-20">
+      <main className="flex-1 pb-16">
         <Hero
           needsCount={data.counts.needsYou}
           inFlightCount={data.counts.inFlight}
           projectCount={data.counts.projects}
+          topAlert={topAlert}
         />
         <NeedsYouSection
           projects={data.needsYou.projects}
@@ -32,9 +49,10 @@ export default async function HomePage() {
         <ProjectsSection projects={data.projects} />
         <RecentSection jobs={data.recent} />
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-5 pb-10 sm:px-8">
-        <div className="hud-frame px-4 py-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">
-          jarvis // arc reactor stable // phase 1 hub online // chat + voice next
+      <footer className="mx-auto w-full max-w-[1400px] px-5 pb-8 sm:px-8">
+        <div className="flex items-center justify-between gap-4 border-t border-beam/15 pt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft">
+          <span>hub // phase 1</span>
+          <span>chat + voice next</span>
         </div>
       </footer>
     </>

@@ -78,7 +78,7 @@ export function ProjectForm({
           required
           defaultValue={initial?.name}
           className={fieldClass}
-          placeholder="Jarvis"
+          placeholder="Project name"
         />
       </Field>
 
@@ -152,7 +152,7 @@ export function ProjectForm({
           rows={4}
           defaultValue={initial?.notes}
           className={fieldClass}
-          placeholder="Conventions, links, context Jarvis should remember."
+          placeholder="Conventions, links, context to remember."
         />
       </Field>
 

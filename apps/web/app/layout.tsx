@@ -22,9 +22,9 @@ const mono = Share_Tech_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jarvis",
+  title: "Command",
   description:
-    "Dark holographic command center — talk to it, dispatch agents, keep every lane moving.",
+    "Holographic project command center — status, agents, and lanes in one viewport.",
 };
 
 export default function RootLayout({
@@ -37,9 +37,9 @@ export default function RootLayout({
       lang="en"
       className={`${oxanium.variable} ${outfit.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col text-ink">
+      <body className="relative flex min-h-full flex-col text-ink">
         <Atmosphere />
-        <div className="shell flex min-h-full flex-1 flex-col">{children}</div>
+        <div className="shell relative flex min-h-full flex-1 flex-col">{children}</div>
       </body>
     </html>
   );

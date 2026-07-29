@@ -2,38 +2,49 @@ import Link from "next/link";
 
 export function SiteHeader() {
   return (
-    <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-5 pt-6 sm:px-8 sm:pt-8">
-      <Link href="/" className="group flex items-center gap-3">
-        <span className="relative flex h-9 w-9 items-center justify-center border border-beam/50 bg-[color-mix(in_oklab,var(--panel)_90%,transparent)] shadow-[0_0_18px_color-mix(in_oklab,var(--beam)_25%,transparent)] transition-transform duration-300 group-hover:rotate-45">
-          <span className="h-2.5 w-2.5 bg-flight shadow-[0_0_10px_var(--flight)]" />
-        </span>
-        <span className="flex flex-col">
-          <span className="brand-mark font-[family-name:var(--font-display)] text-2xl font-extrabold uppercase tracking-[0.08em] sm:text-3xl">
-            Jarvis
+    <header className="relative z-20">
+      <div className="mx-auto flex w-full max-w-[1400px] items-start justify-between px-5 pt-5 sm:px-8 sm:pt-6">
+        <Link href="/" className="group flex items-center gap-3">
+          <span className="relative flex h-8 w-8 items-center justify-center">
+            <span className="absolute inset-0 rounded-full border border-beam/40" />
+            <span className="absolute inset-1.5 rounded-full border border-flight/50 animate-[orbit_12s_linear_infinite]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-flight shadow-[0_0_10px_var(--flight)]" />
           </span>
-          <span className="font-mono text-[11px] uppercase tracking-[0.28em] text-ink-soft">
-            systems online
-            <span className="boot-blink text-flight">_</span>
+          <span className="flex flex-col leading-none">
+            <span className="font-mono text-[10px] uppercase tracking-[0.32em] text-ink-soft">
+              command
+            </span>
+            <span className="mt-1 font-mono text-[10px] uppercase tracking-[0.28em] text-flight">
+              online
+              <span className="boot-blink">_</span>
+            </span>
           </span>
-        </span>
-      </Link>
-      <nav className="flex items-center gap-2 sm:gap-3">
-        <Link
-          href="/#needs-you"
-          className="hidden px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-ink-soft transition-colors hover:text-signal sm:inline"
-        >
-          Alerts
         </Link>
-        <Link
-          href="/#in-flight"
-          className="hidden px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-ink-soft transition-colors hover:text-flight sm:inline"
-        >
-          Lanes
-        </Link>
-        <Link href="/projects/new" className="btn-primary">
-          + New lane
-        </Link>
-      </nav>
+
+        <nav className="flex items-center gap-1 sm:gap-2">
+          <Link
+            href="/#needs-you"
+            className="hidden px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft transition-colors hover:text-signal sm:inline"
+          >
+            Priority
+          </Link>
+          <Link
+            href="/#in-flight"
+            className="hidden px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft transition-colors hover:text-flight sm:inline"
+          >
+            Active
+          </Link>
+          <Link
+            href="/#projects"
+            className="hidden px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft transition-colors hover:text-beam md:inline"
+          >
+            Projects
+          </Link>
+          <Link href="/projects/new" className="btn-ghost !px-3 !py-2 !text-[11px] uppercase tracking-[0.16em]">
+            + Lane
+          </Link>
+        </nav>
+      </div>
     </header>
   );
 }

@@ -20,7 +20,7 @@ export default function NewProjectPage() {
           Open a project lane
         </h1>
         <p className="mt-3 max-w-xl text-ink-soft">
-          Give Jarvis an outcome to steer — not just a repo. Goals beat vibes.
+          Define an outcome to steer — not just a repo. Goals beat vibes.
         </p>
         <div className="mt-10 hud-frame max-w-xl px-5 py-6 sm:px-6">
           <ProjectForm />
