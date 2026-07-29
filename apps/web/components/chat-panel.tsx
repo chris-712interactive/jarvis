@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePushToTalk } from "@/hooks/use-push-to-talk";
 import type { Project } from "@/lib/db/schema";
 
 function messageText(message: UIMessage) {
@@ -29,6 +30,10 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
 
   const projectIdRef = useRef(projectId);
   const conversationIdRef = useRef(conversationId);
+  const busyRef = useRef(false);
+  const sendMessageRef = useRef<(payload: { text: string }) => Promise<void>>(
+    async () => undefined,
+  );
   projectIdRef.current = projectId;
   conversationIdRef.current = conversationId;
 
@@ -36,7 +41,14 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        prepareSendMessagesRequest: ({ messages, id, body, headers, credentials, api }) => ({
+        prepareSendMessagesRequest: ({
+          messages,
+          id,
+          body,
+          headers,
+          credentials,
+          api,
+        }) => ({
           api,
           headers,
           credentials,
@@ -65,6 +77,28 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     useChat({ transport });
 
   const busy = status === "submitted" || status === "streaming";
+  busyRef.current = busy;
+  sendMessageRef.current = sendMessage;
+
+  const {
+    supported: speechSupported,
+    listening,
+    speechError,
+    toggle: toggleMic,
+    stop: stopMic,
+  } = usePushToTalk({
+    enabled: open && configured !== false && !busy,
+    onTranscript: (text) => {
+      setInput(text);
+    },
+    onComplete: (text) => {
+      const trimmed = text.trim();
+      if (!trimmed || busyRef.current || configured === false) return;
+      setInput("");
+      clearError();
+      void sendMessageRef.current({ text: trimmed });
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -86,12 +120,22 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     setConversationId(null);
     setMessages([]);
     clearError();
-  }, [projectId, setMessages, clearError]);
+    stopMic({ send: false });
+  }, [projectId, setMessages, clearError, stopMic]);
+
+  useEffect(() => {
+    if (!open) stopMic({ send: false });
+  }, [open, stopMic]);
+
+  useEffect(() => {
+    if (busy) stopMic({ send: false });
+  }, [busy, stopMic]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     const text = input.trim();
     if (!text || busy) return;
+    stopMic({ send: false });
     setInput("");
     clearError();
     await sendMessage({ text });
@@ -115,7 +159,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                 operator uplink
               </p>
               <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
-                {busy ? "streaming" : "ready"}
+                {listening ? "listening" : busy ? "streaming" : "ready"}
                 <span className="boot-blink text-flight">_</span>
               </p>
             </div>
@@ -150,7 +194,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
 
             {messages.length === 0 && configured !== false ? (
               <p className="text-sm text-ink-soft">
-                Ask for priority status, lane goals, or search the Obsidian vault.
+                Type a question, or tap the mic, speak, then tap again to send.
               </p>
             ) : null}
 
@@ -197,15 +241,43 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                 {error.message || "Uplink failed."}
               </p>
             ) : null}
+            {speechError ? <p className="text-sm text-signal">{speechError}</p> : null}
+            {!speechSupported ? (
+              <p className="text-xs text-ink-soft">
+                Mic push-to-talk needs Chrome or Edge. Typing still works.
+              </p>
+            ) : null}
           </div>
 
           <form onSubmit={onSubmit} className="border-t border-beam/20 p-3">
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={toggleMic}
+                disabled={configured === false || busy || !speechSupported}
+                className={`shrink-0 !px-3 !py-2 !text-[11px] uppercase tracking-[0.14em] disabled:opacity-50 ${
+                  listening ? "btn-signal" : "btn-ghost"
+                }`}
+                aria-pressed={listening}
+                title={
+                  listening
+                    ? "Stop listening and send"
+                    : "Start microphone (tap again to send)"
+                }
+              >
+                {listening ? "Stop" : "Mic"}
+              </button>
               <input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 className="field !py-2"
-                placeholder={projectId ? "Ask about this lane…" : "Ask across lanes…"}
+                placeholder={
+                  listening
+                    ? "Listening…"
+                    : projectId
+                      ? "Ask about this lane…"
+                      : "Ask across lanes…"
+                }
                 disabled={configured === false}
               />
               {busy ? (
@@ -219,7 +291,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               ) : (
                 <button
                   type="submit"
-                  disabled={!input.trim() || configured === false}
+                  disabled={!input.trim() || configured === false || listening}
                   className="btn-primary !px-3 !py-2 !text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
                 >
                   Send

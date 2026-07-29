@@ -23,6 +23,7 @@ Project Hub + dashboard shell in `apps/web`:
 1. Copy `apps/web/.env.example` → `apps/web/.env.local`
 2. Set `OPENAI_API_KEY`
 3. `npm run dev` and click **Open uplink** on the command center
+4. Type, or use **Mic** (Chrome/Edge): tap mic → speak → tap again to send
 
 Read-only tools available to the operator:
 - dashboard / project / job status
