@@ -1,37 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-};
-
-type SpeechRecognitionEventLike = {
-  resultIndex: number;
-  results: ArrayLike<{
-    isFinal: boolean;
-    0: { transcript: string };
-  }>;
-};
-
-type SpeechWindow = Window & {
-  SpeechRecognition?: new () => SpeechRecognitionLike;
-  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-};
-
-function getSpeechRecognitionConstructor() {
-  if (typeof window === "undefined") return null;
-  const speechWindow = window as SpeechWindow;
-  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
-}
+import {
+  getSpeechRecognitionConstructor,
+  type SpeechRecognitionLike,
+} from "@/lib/speech/browser";
 
 export function usePushToTalk(options: {
   enabled: boolean;

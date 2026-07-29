@@ -4,6 +4,12 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePushToTalk } from "@/hooks/use-push-to-talk";
+import { useWakeWordAmbient } from "@/hooks/use-wake-word";
+import {
+  AMBIENT_STORAGE_KEY,
+  DEFAULT_WAKE_WORD,
+  WAKE_WORD_STORAGE_KEY,
+} from "@/lib/speech/browser";
 import type { Project } from "@/lib/db/schema";
 
 function messageText(message: UIMessage) {
@@ -21,12 +27,24 @@ function toolLabel(partType: string) {
   return partType.replace(/^tool-/, "").replaceAll("_", " ");
 }
 
+function phaseLabel(phase: string, pushListening: boolean, busy: boolean) {
+  if (busy) return "streaming";
+  if (pushListening) return "listening";
+  if (phase === "watching") return "ambient";
+  if (phase === "armed") return "wake heard";
+  if (phase === "capturing") return "capturing";
+  return "ready";
+}
+
 export function ChatPanel({ projects }: { projects: Project[] }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [ambientEnabled, setAmbientEnabled] = useState(false);
+  const [wakeWord, setWakeWord] = useState(DEFAULT_WAKE_WORD);
+  const [hydrated, setHydrated] = useState(false);
 
   const projectIdRef = useRef(projectId);
   const conversationIdRef = useRef(conversationId);
@@ -34,6 +52,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   const sendMessageRef = useRef<(payload: { text: string }) => Promise<void>>(
     async () => undefined,
   );
+  const clearErrorRef = useRef<() => void>(() => undefined);
   projectIdRef.current = projectId;
   conversationIdRef.current = conversationId;
 
@@ -79,6 +98,9 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   const busy = status === "submitted" || status === "streaming";
   busyRef.current = busy;
   sendMessageRef.current = sendMessage;
+  clearErrorRef.current = clearError;
+
+  const [pushListening, setPushListening] = useState(false);
 
   const {
     supported: speechSupported,
@@ -87,7 +109,12 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     toggle: toggleMic,
     stop: stopMic,
   } = usePushToTalk({
-    enabled: open && configured !== false && !busy,
+    enabled:
+      open &&
+      configured !== false &&
+      !busy &&
+      !ambientEnabled &&
+      hydrated,
     onTranscript: (text) => {
       setInput(text);
     },
@@ -95,10 +122,72 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
       const trimmed = text.trim();
       if (!trimmed || busyRef.current || configured === false) return;
       setInput("");
-      clearError();
+      clearErrorRef.current();
       void sendMessageRef.current({ text: trimmed });
     },
   });
+
+  useEffect(() => {
+    setPushListening(listening);
+  }, [listening]);
+
+  const {
+    phase: ambientPhase,
+    partial: ambientPartial,
+    speechError: ambientError,
+    listening: ambientListening,
+  } = useWakeWordAmbient({
+    enabled: hydrated && ambientEnabled && configured !== false,
+    paused: busy || listening,
+    wakeWord,
+    onWake: () => {
+      setOpen(true);
+    },
+    onPartialCommand: (text) => {
+      setInput(text);
+    },
+    onCommand: (text) => {
+      const trimmed = text.trim();
+      if (!trimmed || busyRef.current || configured === false) return;
+      setOpen(true);
+      setInput("");
+      clearErrorRef.current();
+      void sendMessageRef.current({ text: trimmed });
+    },
+  });
+
+  useEffect(() => {
+    try {
+      const storedAmbient = window.localStorage.getItem(AMBIENT_STORAGE_KEY);
+      const storedWake = window.localStorage.getItem(WAKE_WORD_STORAGE_KEY);
+      if (storedAmbient === "1") setAmbientEnabled(true);
+      if (storedWake?.trim()) setWakeWord(storedWake.trim().toLowerCase());
+    } catch {
+      // ignore storage failures
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(
+        AMBIENT_STORAGE_KEY,
+        ambientEnabled ? "1" : "0",
+      );
+    } catch {
+      // ignore
+    }
+  }, [ambientEnabled, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(WAKE_WORD_STORAGE_KEY, wakeWord);
+    } catch {
+      // ignore
+    }
+  }, [wakeWord, hydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,8 +230,38 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     await sendMessage({ text });
   }
 
+  function toggleAmbient() {
+    if (!speechSupported || configured === false) return;
+    setAmbientEnabled((value) => {
+      const next = !value;
+      if (next) {
+        stopMic({ send: false });
+        setOpen(true);
+      }
+      return next;
+    });
+  }
+
+  const statusText = phaseLabel(
+    ambientEnabled ? ambientPhase : "off",
+    pushListening,
+    busy,
+  );
+
   return (
     <>
+      {ambientEnabled && !open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="fixed bottom-5 left-5 z-40 flex items-center gap-2 border border-flight/40 bg-[color-mix(in_oklab,var(--panel-strong)_92%,transparent)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-flight backdrop-blur-md"
+        >
+          <span className="live-dot bg-flight" />
+          ambient // {ambientPhase}
+          {ambientPartial ? ` // ${ambientPartial.slice(0, 28)}` : ""}
+        </button>
+      ) : null}
+
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -152,14 +271,14 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
       </button>
 
       {open ? (
-        <section className="fixed bottom-20 right-5 z-40 flex h-[min(70vh,640px)] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden border border-beam/35 bg-[color-mix(in_oklab,var(--panel-strong)_94%,transparent)] shadow-[0_0_40px_color-mix(in_oklab,var(--beam)_18%,transparent)] backdrop-blur-xl">
+        <section className="fixed bottom-20 right-5 z-40 flex h-[min(72vh,680px)] w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden border border-beam/35 bg-[color-mix(in_oklab,var(--panel-strong)_94%,transparent)] shadow-[0_0_40px_color-mix(in_oklab,var(--beam)_18%,transparent)] backdrop-blur-xl">
           <header className="flex items-center justify-between gap-3 border-b border-beam/20 px-4 py-3">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-beam">
                 operator uplink
               </p>
               <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
-                {listening ? "listening" : busy ? "streaming" : "ready"}
+                {statusText}
                 <span className="boot-blink text-flight">_</span>
               </p>
             </div>
@@ -178,6 +297,38 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             </select>
           </header>
 
+          <div className="flex items-center gap-2 border-b border-beam/15 px-4 py-2">
+            <button
+              type="button"
+              onClick={toggleAmbient}
+              disabled={configured === false || !speechSupported}
+              className={`!px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50 ${
+                ambientEnabled ? "btn-signal" : "btn-ghost"
+              }`}
+              aria-pressed={ambientEnabled}
+              title={`Always-on wake word (“${wakeWord}”)`}
+            >
+              {ambientEnabled ? "Ambient on" : "Ambient off"}
+            </button>
+            <label className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+                wake
+              </span>
+              <input
+                value={wakeWord}
+                onChange={(event) => setWakeWord(event.target.value)}
+                onBlur={() =>
+                  setWakeWord(
+                    wakeWord.toLowerCase().trim() || DEFAULT_WAKE_WORD,
+                  )
+                }
+                className="field !py-1.5 !text-xs"
+                disabled={configured === false}
+                aria-label="Wake word"
+              />
+            </label>
+          </div>
+
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {configured === false ? (
               <div className="hud-frame px-3 py-3 text-sm text-ink-soft">
@@ -194,8 +345,24 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
 
             {messages.length === 0 && configured !== false ? (
               <p className="text-sm text-ink-soft">
-                Type a question, or tap the mic, speak, then tap again to send.
+                {ambientEnabled
+                  ? `Ambient on — say “${wakeWord}” then your command.`
+                  : "Type, tap Mic, or enable Ambient for always-on wake word."}
               </p>
+            ) : null}
+
+            {ambientEnabled &&
+            (ambientPhase === "armed" || ambientPhase === "capturing") ? (
+              <div className="hud-frame hud-frame-flight px-3 py-3 text-sm">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-flight">
+                  {ambientPhase === "armed"
+                    ? "wake confirmed // awaiting command"
+                    : "capturing command"}
+                </p>
+                <p className="mt-2 text-ink">
+                  {ambientPartial || "Go ahead…"}
+                </p>
+              </div>
             ) : null}
 
             {messages.map((message) => {
@@ -242,9 +409,17 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               </p>
             ) : null}
             {speechError ? <p className="text-sm text-signal">{speechError}</p> : null}
+            {ambientError ? (
+              <p className="text-sm text-signal">{ambientError}</p>
+            ) : null}
             {!speechSupported ? (
               <p className="text-xs text-ink-soft">
-                Mic push-to-talk needs Chrome or Edge. Typing still works.
+                Voice needs Chrome or Edge. Typing still works.
+              </p>
+            ) : null}
+            {ambientEnabled && ambientListening ? (
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-flight">
+                mic live // watching for “{wakeWord}”
               </p>
             ) : null}
           </div>
@@ -254,15 +429,22 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               <button
                 type="button"
                 onClick={toggleMic}
-                disabled={configured === false || busy || !speechSupported}
+                disabled={
+                  configured === false ||
+                  busy ||
+                  !speechSupported ||
+                  ambientEnabled
+                }
                 className={`shrink-0 !px-3 !py-2 !text-[11px] uppercase tracking-[0.14em] disabled:opacity-50 ${
                   listening ? "btn-signal" : "btn-ghost"
                 }`}
                 aria-pressed={listening}
                 title={
-                  listening
-                    ? "Stop listening and send"
-                    : "Start microphone (tap again to send)"
+                  ambientEnabled
+                    ? "Disable Ambient to use manual Mic"
+                    : listening
+                      ? "Stop listening and send"
+                      : "Start microphone (tap again to send)"
                 }
               >
                 {listening ? "Stop" : "Mic"}
@@ -272,11 +454,13 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                 onChange={(event) => setInput(event.target.value)}
                 className="field !py-2"
                 placeholder={
-                  listening
-                    ? "Listening…"
-                    : projectId
-                      ? "Ask about this lane…"
-                      : "Ask across lanes…"
+                  ambientPhase === "capturing" || ambientPhase === "armed"
+                    ? "Capturing command…"
+                    : listening
+                      ? "Listening…"
+                      : projectId
+                        ? "Ask about this lane…"
+                        : "Ask across lanes…"
                 }
                 disabled={configured === false}
               />
@@ -291,7 +475,12 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               ) : (
                 <button
                   type="submit"
-                  disabled={!input.trim() || configured === false || listening}
+                  disabled={
+                    !input.trim() ||
+                    configured === false ||
+                    listening ||
+                    ambientPhase === "capturing"
+                  }
                   className="btn-primary !px-3 !py-2 !text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
                 >
                   Send
