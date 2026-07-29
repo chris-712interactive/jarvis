@@ -568,3 +568,129 @@ a {
   color: var(--flight);
   box-shadow: 0 0 16px color-mix(in oklab, var(--flight) 15%, transparent);
 }
+
+/* Obsidian vault note preview */
+.vault-md {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.vault-md > :first-child {
+  margin-top: 0;
+}
+
+.vault-md h1,
+.vault-md h2,
+.vault-md h3,
+.vault-md h4 {
+  color: var(--ink);
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 1.25em 0 0.45em;
+}
+
+.vault-md h1 {
+  font-size: 1.55rem;
+}
+
+.vault-md h2 {
+  font-size: 1.25rem;
+}
+
+.vault-md h3 {
+  font-size: 1.05rem;
+}
+
+.vault-md p,
+.vault-md ul,
+.vault-md ol,
+.vault-md blockquote,
+.vault-md pre,
+.vault-md table {
+  margin: 0.7em 0;
+}
+
+.vault-md a {
+  color: var(--beam);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--beam) 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.vault-md a:hover {
+  text-decoration-color: var(--beam);
+}
+
+.vault-md strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.vault-md ul,
+.vault-md ol {
+  padding-left: 1.25rem;
+}
+
+.vault-md li + li {
+  margin-top: 0.25rem;
+}
+
+.vault-md blockquote {
+  border-left: 2px solid color-mix(in oklab, var(--beam) 45%, transparent);
+  padding-left: 0.85rem;
+  color: color-mix(in oklab, var(--ink-soft) 90%, white);
+}
+
+.vault-md code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.82em;
+  color: var(--flight);
+  background: color-mix(in oklab, var(--flight) 10%, transparent);
+  padding: 0.1em 0.35em;
+}
+
+.vault-md pre {
+  overflow-x: auto;
+  border: 1px solid color-mix(in oklab, var(--beam) 20%, transparent);
+  background: color-mix(in oklab, #031018 88%, transparent);
+  padding: 0.75rem 0.85rem;
+}
+
+.vault-md pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--ink-soft);
+}
+
+.vault-md hr {
+  border: 0;
+  border-top: 1px solid color-mix(in oklab, var(--beam) 22%, transparent);
+  margin: 1.25em 0;
+}
+
+.vault-md table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.vault-md th,
+.vault-md td {
+  border: 1px solid color-mix(in oklab, var(--beam) 22%, transparent);
+  padding: 0.4rem 0.55rem;
+  text-align: left;
+}
+
+.vault-md th {
+  color: var(--ink);
+  background: color-mix(in oklab, var(--beam) 8%, transparent);
+}
+
+.vault-md input[type="checkbox"] {
+  margin-right: 0.4rem;
+  accent-color: var(--flight);
+}
+

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type VaultStatus = {
   configured: boolean;
@@ -30,6 +32,8 @@ type NoteBody = NoteMeta & {
   truncated: boolean;
 };
 
+type ViewMode = "preview" | "source";
+
 export function VaultNotesPanel({
   projectId,
   vaultPath,
@@ -43,6 +47,7 @@ export function VaultNotesPanel({
   const [query, setQuery] = useState("");
   const [activePath, setActivePath] = useState<string | null>(null);
   const [activeNote, setActiveNote] = useState<NoteBody | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -218,13 +223,47 @@ export function VaultNotesPanel({
         <div className="max-h-72 overflow-y-auto border border-beam/15 p-3">
           {activeNote ? (
             <>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-beam">
-                {activeNote.path}
-                {activeNote.truncated ? " // truncated" : ""}
-              </p>
-              <pre className="mt-3 whitespace-pre-wrap font-mono text-xs leading-relaxed text-ink-soft">
-                {activeNote.content}
-              </pre>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-beam">
+                  {activeNote.path}
+                  {activeNote.truncated ? " // truncated" : ""}
+                </p>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("preview")}
+                    className={`px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                      viewMode === "preview"
+                        ? "bg-flight/15 text-flight"
+                        : "text-ink-soft hover:text-beam"
+                    }`}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("source")}
+                    className={`px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                      viewMode === "source"
+                        ? "bg-flight/15 text-flight"
+                        : "text-ink-soft hover:text-beam"
+                    }`}
+                  >
+                    Source
+                  </button>
+                </div>
+              </div>
+              {viewMode === "preview" ? (
+                <div className="vault-md mt-3">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {activeNote.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <pre className="mt-3 whitespace-pre-wrap font-mono text-xs leading-relaxed text-ink-soft">
+                  {activeNote.content}
+                </pre>
+              )}
             </>
           ) : (
             <p className="text-sm text-ink-soft">Select a note to read.</p>
