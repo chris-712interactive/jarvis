@@ -37,7 +37,7 @@ function resolveReplyBody(job: Job, projectName: string): string | null {
     return buildCompletionReply(job, projectName);
   }
 
-  // Triage / ambiguous items: resolving clears the queue without emailing.
+  // Question/triage items with an empty draft: resolve without emailing.
   return null;
 }
 
@@ -56,20 +56,29 @@ export type ResolveJobResult = {
  */
 export async function resolveJobWithSideEffects(
   jobId: string,
-  options?: { note?: string | null },
+  options?: { note?: string | null; replyDraft?: string | null },
 ): Promise<ResolveJobResult | null> {
   const existing = await getJob(jobId);
   if (!existing) return null;
 
+  // Persist an edited draft before resolving so the sent body matches the UI.
+  if (options?.replyDraft !== undefined) {
+    await updateJob(existing.id, {
+      emailReplyDraft: options.replyDraft,
+    });
+  }
+
+  const fresh = (await getJob(jobId)) ?? existing;
+
   const summary =
     options?.note?.trim() ||
-    `Approved / resolved by operator. (${existing.title})`;
+    `Approved / resolved by operator. (${fresh.title})`;
 
   let job =
-    (await updateJob(existing.id, {
+    (await updateJob(fresh.id, {
       status: "done",
       summary,
-    })) ?? existing;
+    })) ?? fresh;
 
   const emailReply = {
     attempted: false,

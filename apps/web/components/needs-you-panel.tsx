@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Job, Project } from "@/lib/db/schema";
 
 type JobWithProject = Job & { project: Project | null };
@@ -26,6 +26,23 @@ export function NeedsYouSection({
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      for (const job of jobs) {
+        if (next[job.id] === undefined) {
+          next[job.id] = job.emailReplyDraft ?? "";
+        }
+      }
+      // Drop drafts for jobs that left the queue.
+      for (const id of Object.keys(next)) {
+        if (!jobs.some((job) => job.id === id)) delete next[id];
+      }
+      return next;
+    });
+  }, [jobs]);
 
   const empty = projects.length === 0 && jobs.length === 0;
 
@@ -50,17 +67,47 @@ export function NeedsYouSection({
     }
   }
 
-  async function resolveJob(jobId: string, title: string) {
-    setPendingId(`j-${jobId}`);
+  async function saveDraft(jobId: string) {
+    setPendingId(`save-${jobId}`);
     setError(null);
     try {
       const res = await fetch(`/api/jobs/${jobId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "done",
-          summary: `Approved / resolved by operator. (${title})`,
+          emailReplyDraft: drafts[jobId] ?? "",
         }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "Could not save draft");
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function resolveJob(job: JobWithProject) {
+    setPendingId(`j-${job.id}`);
+    setError(null);
+    try {
+      const draft = drafts[job.id];
+      const payload: Record<string, unknown> = {
+        status: "done",
+        summary: `Approved / resolved by operator. (${job.title})`,
+      };
+      // Pass edited draft when this is an email-originated item.
+      if (job.emailFrom && !job.emailReplySent) {
+        payload.emailReplyDraft = draft?.trim() ? draft : null;
+      }
+
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -86,7 +133,7 @@ export function NeedsYouSection({
           </h2>
         </div>
         <p className="hidden max-w-sm text-right text-sm text-ink-soft sm:block">
-          Approve here — Obsidian notes do not clear this queue.
+          Edit email drafts here before Approve & reply.
         </p>
       </div>
 
@@ -138,68 +185,99 @@ export function NeedsYouSection({
               </div>
             </li>
           ))}
-          {jobs.map((job) => (
-            <li key={`j-${job.id}`} className="hud-frame hud-frame-signal px-4 py-4 sm:px-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <StatusChip />
-                  <div>
-                    <p className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight">
-                      {job.title}
-                    </p>
-                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">
-                      {job.summary || "Needs a decision."}
-                      {job.project ? (
-                        <>
-                          {" "}
-                          <Link
-                            href={`/projects/${job.project.id}`}
-                            className="font-medium text-beam underline decoration-beam/40 underline-offset-2 hover:decoration-beam"
-                          >
-                            {job.project.name}
-                          </Link>
-                        </>
+          {jobs.map((job) => {
+            const canEditReply =
+              Boolean(job.emailFrom) && !job.emailReplySent;
+            const draftValue = drafts[job.id] ?? job.emailReplyDraft ?? "";
+            const hasDraft = Boolean(draftValue.trim());
+            return (
+              <li key={`j-${job.id}`} className="hud-frame hud-frame-signal px-4 py-4 sm:px-5">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <StatusChip />
+                      <div>
+                        <p className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight">
+                          {job.title}
+                        </p>
+                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">
+                          {job.summary || "Needs a decision."}
+                          {job.project ? (
+                            <>
+                              {" "}
+                              <Link
+                                href={`/projects/${job.project.id}`}
+                                className="font-medium text-beam underline decoration-beam/40 underline-offset-2 hover:decoration-beam"
+                              >
+                                {job.project.name}
+                              </Link>
+                            </>
+                          ) : null}
+                        </p>
+                        {job.emailFrom ? (
+                          <p className="mt-2 font-mono text-[11px] text-ink-soft">
+                            email // {job.emailFrom}
+                            {job.emailReplySent
+                              ? " · reply sent"
+                              : hasDraft
+                                ? " · edit draft below"
+                                : " · add a reply or resolve without email"}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 pl-5 sm:pl-0">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal">
+                        {job.status.replace("_", " ")}
+                      </span>
+                      {canEditReply ? (
+                        <button
+                          type="button"
+                          onClick={() => void saveDraft(job.id)}
+                          disabled={pendingId === `save-${job.id}` || pendingId === `j-${job.id}`}
+                          className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
+                        >
+                          {pendingId === `save-${job.id}` ? "…" : "Save draft"}
+                        </button>
                       ) : null}
-                    </p>
-                    {job.emailFrom ? (
-                      <p className="mt-2 font-mono text-[11px] text-ink-soft">
-                        email // {job.emailFrom}
-                        {job.emailReplySent
-                          ? " · reply sent"
-                          : job.emailReplyDraft
-                            ? " · draft reply ready"
-                            : " · triage"}
-                      </p>
-                    ) : null}
-                    {job.emailReplyDraft ? (
-                      <pre className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap border border-beam/15 bg-[color-mix(in_oklab,var(--panel)_80%,transparent)] px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-soft">
-                        {job.emailReplyDraft}
-                      </pre>
-                    ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void resolveJob(job)}
+                        disabled={pendingId === `j-${job.id}` || pendingId === `save-${job.id}`}
+                        className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
+                      >
+                        {pendingId === `j-${job.id}`
+                          ? "…"
+                          : canEditReply && hasDraft
+                            ? "Approve & reply"
+                            : "Resolve"}
+                      </button>
+                    </div>
                   </div>
+
+                  {canEditReply ? (
+                    <label className="block pl-5 sm:pl-8">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft/70">
+                        reply draft
+                      </span>
+                      <textarea
+                        value={draftValue}
+                        onChange={(event) =>
+                          setDrafts((prev) => ({
+                            ...prev,
+                            [job.id]: event.target.value,
+                          }))
+                        }
+                        rows={8}
+                        className="field mt-2 max-h-64 min-h-[8rem] font-mono text-[12px] leading-relaxed"
+                        placeholder="Edit the reply Jarvis will send on Approve & reply…"
+                      />
+                    </label>
+                  ) : null}
                 </div>
-                <div className="flex items-center gap-3 pl-5 sm:pl-0">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal">
-                    {job.status.replace("_", " ")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void resolveJob(job.id, job.title)}
-                    disabled={pendingId === `j-${job.id}`}
-                    className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
-                  >
-                    {pendingId === `j-${job.id}`
-                      ? "…"
-                      : job.emailFrom && job.emailReplyDraft && !job.emailReplySent
-                        ? "Approve & reply"
-                        : job.emailFrom && !job.emailReplyDraft
-                          ? "Resolve"
-                          : "Approve"}
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

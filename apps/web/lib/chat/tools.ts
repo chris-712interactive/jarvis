@@ -297,7 +297,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     resolve_job: tool({
       description:
-        "Mark a priority job as approved/done so it leaves Needs you. Use when the user approves a decision, architecture choice, or clears a blocked job. Prefer jobId from list_jobs / get_dashboard_status; title match is a fallback.",
+        "Mark a priority job as approved/done so it leaves Needs you. For email drafts, pass replyDraft to edit the reply before send. Prefer jobId from list_jobs / get_dashboard_status; title match is a fallback.",
       inputSchema: z.object({
         jobId: z.string().optional().describe("Exact job id when known"),
         title: z
@@ -308,8 +308,15 @@ export function createOperatorTools(activeProjectId?: string | null) {
           .string()
           .optional()
           .describe("Optional resolution note saved on the job summary"),
+        replyDraft: z
+          .string()
+          .max(20_000)
+          .optional()
+          .describe(
+            "Edited email reply body to send on approve. Omit to keep the stored draft / code completion template.",
+          ),
       }),
-      execute: async ({ jobId, title, note }) => {
+      execute: async ({ jobId, title, note, replyDraft }) => {
         let job = jobId ? await getJob(jobId) : null;
         if (!job && title?.trim()) {
           const needle = title.trim().toLowerCase();
@@ -341,6 +348,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           `Approved / resolved by operator. (${job.title})`;
         const resolved = await resolveJobWithSideEffects(job.id, {
           note: summary,
+          replyDraft,
         });
         return {
           resolved: true,

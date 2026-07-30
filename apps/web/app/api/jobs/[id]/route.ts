@@ -41,6 +41,10 @@ export async function PATCH(request: Request, { params }: Params) {
   ) {
     const resolved = await resolveJobWithSideEffects(id, {
       note: parsed.data.summary,
+      replyDraft:
+        parsed.data.emailReplyDraft !== undefined
+          ? parsed.data.emailReplyDraft
+          : undefined,
     });
     if (!resolved) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -54,6 +58,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const job = await updateJob(id, {
     ...parsed.data,
     artifactUrl: parsed.data.artifactUrl,
+    emailReplyDraft: parsed.data.emailReplyDraft,
   });
   if (!job) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });

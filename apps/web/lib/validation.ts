@@ -80,6 +80,14 @@ export const updateJobSchema = z.object({
   summary: z.string().trim().max(2000).optional(),
   brief: z.string().trim().max(8000).optional(),
   artifactUrl: optionalUrl,
+  emailReplyDraft: z
+    .union([z.string().max(20_000), z.literal(""), z.null()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) return undefined;
+      if (value === "" || value === null) return null;
+      return value;
+    }),
   interruptLevel: z.enum(interruptLevels).optional(),
 });
 
