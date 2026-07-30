@@ -11,7 +11,10 @@ import {
   updateProject,
 } from "@/lib/db/queries";
 import { kickJob } from "@/lib/jobs/runner";
+import { resolveJobWithSideEffects } from "@/lib/jobs/resolve";
+import { ingestInboundEmails } from "@/lib/jobs/email-ingest";
 import { resolveLane } from "@/lib/chat/resolve-lane";
+import { isGmailConfigured } from "@/lib/gmail/client";
 import {
   listVaultNotes,
   readVaultNote,
@@ -128,6 +131,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             gaPropertyId: p.gaPropertyId,
             contentChannel: p.contentChannel,
             dailyContent: p.dailyContent,
+            emailSenders: p.emailSenders,
             needsYou: p.needsYou,
             interruptLevel: p.interruptLevel,
             notes: p.notes,
@@ -194,6 +198,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             contentChannel: project.contentChannel,
             contentBrief: project.contentBrief,
             dailyContent: project.dailyContent,
+            emailSenders: project.emailSenders,
             needsYou: project.needsYou,
             interruptLevel: project.interruptLevel,
             notes: project.notes,
@@ -334,20 +339,22 @@ export function createOperatorTools(activeProjectId?: string | null) {
         const summary =
           note?.trim() ||
           `Approved / resolved by operator. (${job.title})`;
-        const updated = await updateJob(job.id, {
-          status: "done",
-          summary,
+        const resolved = await resolveJobWithSideEffects(job.id, {
+          note: summary,
         });
         return {
           resolved: true,
-          job: updated
+          job: resolved
             ? {
-                id: updated.id,
-                title: updated.title,
-                status: updated.status,
-                summary: updated.summary,
+                id: resolved.job.id,
+                title: resolved.job.title,
+                status: resolved.job.status,
+                summary: resolved.job.summary,
+                emailFrom: resolved.job.emailFrom,
+                emailReplySent: resolved.job.emailReplySent,
               }
             : null,
+          emailReply: resolved?.emailReply ?? null,
         };
       },
     }),
@@ -826,6 +833,36 @@ export function createOperatorTools(activeProjectId?: string | null) {
             result.queued.length > 0
               ? `Draft job queued on "${resolved.project.name}". Watch In flight, then Needs you — copy into ${resolved.project.contentChannel || "the channel"} and Approve/Resolve.`
               : result.skipped[0]?.reason || "Nothing queued.",
+        };
+      },
+    }),
+
+    ingest_emails: tool({
+      description:
+        "Poll Gmail for unread messages from allowlisted senders on project lanes, queue code jobs (Cloud Agents), and notify the operator. Requires Gmail OAuth env vars.",
+      inputSchema: z.object({
+        max: z
+          .number()
+          .int()
+          .min(1)
+          .max(40)
+          .optional()
+          .describe("Max messages to scan. Defaults to 15."),
+      }),
+      execute: async ({ max }) => {
+        if (!isGmailConfigured()) {
+          return {
+            error:
+              "Gmail not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN (visit /api/gmail/oauth/start once).",
+          };
+        }
+        const result = await ingestInboundEmails({ maxMessages: max ?? 15 });
+        return {
+          ...result,
+          note:
+            result.queued.length > 0
+              ? `Queued ${result.queued.length} email code job(s). Watch In flight, then Approve in Needs you to reply to the sender.`
+              : "No new allowlisted emails queued.",
         };
       },
     }),

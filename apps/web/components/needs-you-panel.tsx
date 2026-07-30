@@ -161,6 +161,12 @@ export function NeedsYouSection({
                         </>
                       ) : null}
                     </p>
+                    {job.emailFrom ? (
+                      <p className="mt-2 font-mono text-[11px] text-ink-soft">
+                        email // {job.emailFrom}
+                        {job.emailReplySent ? " · reply sent" : " · approve to reply"}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 pl-5 sm:pl-0">
@@ -173,7 +179,11 @@ export function NeedsYouSection({
                     disabled={pendingId === `j-${job.id}`}
                     className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
                   >
-                    {pendingId === `j-${job.id}` ? "…" : "Approve"}
+                    {pendingId === `j-${job.id}`
+                      ? "…"
+                      : job.emailFrom && !job.emailReplySent
+                        ? "Approve & reply"
+                        : "Approve"}
                   </button>
                 </div>
               </div>

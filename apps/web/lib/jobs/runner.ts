@@ -362,10 +362,34 @@ async function refreshCodeAgent(job: Job) {
       ]
         .filter(Boolean)
         .join(" ");
+      const artifactUrl = prUrl || agentUrl;
+
+      // Email-originated code jobs wait for operator Approve before reply.
+      if (job.emailMessageId) {
+        const emailSummary = [
+          summary,
+          `From ${job.emailFrom || "sender"}. Approve to email them that work is complete.`,
+        ].join(" ");
+        const updated = await updateJob(job.id, {
+          status: "needs_you",
+          summary: emailSummary,
+          artifactUrl,
+          agentRunId: runId,
+        });
+        await createNotification({
+          title: `PR ready (email): ${job.title}`,
+          body: emailSummary,
+          level: job.interruptLevel === "silent" ? "nudge" : job.interruptLevel,
+          projectId: job.projectId,
+          jobId: job.id,
+        });
+        return updated;
+      }
+
       const updated = await updateJob(job.id, {
         status: "done",
         summary,
-        artifactUrl: prUrl || agentUrl,
+        artifactUrl,
         agentRunId: runId,
       });
       await createNotification({

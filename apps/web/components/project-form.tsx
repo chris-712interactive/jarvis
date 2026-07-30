@@ -27,6 +27,7 @@ export function ProjectForm({
     contentChannel: string;
     contentBrief: string;
     dailyContent: boolean;
+    emailSenders: string;
     interruptLevel: (typeof interrupts)[number];
   };
 }) {
@@ -52,6 +53,7 @@ export function ProjectForm({
       contentChannel: String(form.get("contentChannel") ?? "") || null,
       contentBrief: String(form.get("contentBrief") ?? ""),
       dailyContent: String(form.get("dailyContent") ?? "false") === "true",
+      emailSenders: String(form.get("emailSenders") ?? ""),
       interruptLevel: String(form.get("interruptLevel") ?? "digest"),
     };
 
@@ -196,6 +198,17 @@ export function ProjectForm({
           defaultValue={initial?.contentBrief}
           className={fieldClass}
           placeholder="Voice, audience, CTA rules for daily Skool / channel drafts."
+        />
+      </Field>
+
+      <Field label="Email senders (Gmail → code jobs)" htmlFor="emailSenders">
+        <textarea
+          id="emailSenders"
+          name="emailSenders"
+          rows={3}
+          defaultValue={initial?.emailSenders}
+          className={fieldClass}
+          placeholder="alice@client.com, bob@agency.com"
         />
       </Field>
 

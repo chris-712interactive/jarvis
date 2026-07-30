@@ -60,6 +60,7 @@ export type CreateProjectInput = {
   contentChannel?: string | null;
   contentBrief?: string;
   dailyContent?: boolean;
+  emailSenders?: string;
   interruptLevel?: InterruptLevel;
 };
 
@@ -86,6 +87,7 @@ export async function createProject(input: CreateProjectInput) {
     contentChannel: input.contentChannel?.trim() || null,
     contentBrief: input.contentBrief?.trim() ?? "",
     dailyContent: Boolean(input.dailyContent),
+    emailSenders: input.emailSenders?.trim() ?? "",
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
     updatedAt: now,
@@ -135,6 +137,10 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
       input.dailyContent !== undefined
         ? Boolean(input.dailyContent)
         : existing.dailyContent,
+    emailSenders:
+      input.emailSenders !== undefined
+        ? input.emailSenders.trim()
+        : existing.emailSenders,
     interruptLevel: input.interruptLevel ?? existing.interruptLevel,
     updatedAt: new Date(),
   };
@@ -178,6 +184,16 @@ export async function getJob(id: string) {
   return rows[0] ?? null;
 }
 
+export async function getJobByEmailMessageId(emailMessageId: string) {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.emailMessageId, emailMessageId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export type CreateJobInput = {
   projectId: string;
   title: string;
@@ -188,6 +204,11 @@ export type CreateJobInput = {
   artifactUrl?: string | null;
   agentId?: string | null;
   agentRunId?: string | null;
+  emailMessageId?: string | null;
+  emailThreadId?: string | null;
+  emailFrom?: string | null;
+  emailSubject?: string | null;
+  emailReplySent?: boolean;
   interruptLevel?: InterruptLevel;
 };
 
@@ -205,6 +226,11 @@ export async function createJob(input: CreateJobInput) {
     artifactUrl: input.artifactUrl?.trim() || null,
     agentId: input.agentId?.trim() || null,
     agentRunId: input.agentRunId?.trim() || null,
+    emailMessageId: input.emailMessageId?.trim() || null,
+    emailThreadId: input.emailThreadId?.trim() || null,
+    emailFrom: input.emailFrom?.trim() || null,
+    emailSubject: input.emailSubject?.trim() || null,
+    emailReplySent: Boolean(input.emailReplySent),
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
     updatedAt: now,
@@ -222,6 +248,11 @@ export type UpdateJobInput = {
   artifactUrl?: string | null;
   agentId?: string | null;
   agentRunId?: string | null;
+  emailMessageId?: string | null;
+  emailThreadId?: string | null;
+  emailFrom?: string | null;
+  emailSubject?: string | null;
+  emailReplySent?: boolean;
   interruptLevel?: InterruptLevel;
 };
 
@@ -249,6 +280,26 @@ export async function updateJob(id: string, input: UpdateJobInput) {
       input.agentRunId !== undefined
         ? input.agentRunId?.trim() || null
         : existing.agentRunId,
+    emailMessageId:
+      input.emailMessageId !== undefined
+        ? input.emailMessageId?.trim() || null
+        : existing.emailMessageId,
+    emailThreadId:
+      input.emailThreadId !== undefined
+        ? input.emailThreadId?.trim() || null
+        : existing.emailThreadId,
+    emailFrom:
+      input.emailFrom !== undefined
+        ? input.emailFrom?.trim() || null
+        : existing.emailFrom,
+    emailSubject:
+      input.emailSubject !== undefined
+        ? input.emailSubject?.trim() || null
+        : existing.emailSubject,
+    emailReplySent:
+      input.emailReplySent !== undefined
+        ? Boolean(input.emailReplySent)
+        : existing.emailReplySent,
     interruptLevel: input.interruptLevel ?? existing.interruptLevel,
     updatedAt: new Date(),
   };

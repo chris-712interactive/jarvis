@@ -22,6 +22,7 @@ Project Hub + dashboard shell in `apps/web`:
 - **Phase 5 coding workers** — `kind: code` jobs launch Cursor Cloud Agents (`CURSOR_API_KEY`)
 - **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; approve-before-post
 - **GA4 lane analytics** — `get_lane_analytics` + `GET /api/projects/:id/analytics`
+- **Gmail → code agents** — allowlisted senders → Cloud Agent PR → Approve & reply
 
 ### Chat + async jobs (Phase 2–3 + 5)
 
@@ -29,13 +30,14 @@ Project Hub + dashboard shell in `apps/web`:
 2. Set `OPENAI_API_KEY`
 3. For coding missions, also set `CURSOR_API_KEY` and put a GitHub repo URL on the lane
 4. For analytics, set GA4 service-account credentials and a property id per lane
-5. `npm run dev` and click **Open uplink** on the command center
-6. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
-7. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
+5. For email→code, set Gmail OAuth vars (see below)
+6. `npm run dev` and click **Open uplink** on the command center
+7. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
+8. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
 
 Operator tools:
 - dashboard / project / job status
-- `start_job` / `get_job` / `resolve_job` / `draft_daily_post` (async workforce)
+- `start_job` / `get_job` / `resolve_job` / `draft_daily_post` / `ingest_emails`
 - Obsidian list, search, read, write for the active lane
 - GitHub `get_repo_summary` / `list_open_prs` for lanes with a repo URL
 - GA4 `get_lane_analytics` for lanes with a property id
@@ -43,8 +45,17 @@ Operator tools:
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
 - `research` / `ops` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
 - `message` → draft channel/Skool copy under `Content/<channel>/`, then **Needs you** (approve-before-post)
-- `code` → launch a Cursor Cloud Agent against the lane’s GitHub repo (`CURSOR_API_KEY` required; repo must be connected in Cursor Integrations). Job stays **In flight** while the agent runs, then **done** (with PR link when available) or **needs_you** / **failed**
+- `code` → launch a Cursor Cloud Agent against the lane’s GitHub repo (`CURSOR_API_KEY` required; repo must be connected in Cursor Integrations). Job stays **In flight** while the agent runs, then **done** (with PR link when available) or **needs_you** / **failed**. Email-originated code jobs finish as **Needs you** so you Approve before Jarvis replies.
 - Missing vault path (non-code) or missing API key / repo URL (code) → **Needs you** with a configure message
+
+### Gmail → code job → approve → reply
+
+1. Google Cloud: create an OAuth **Web** client, enable **Gmail API**, add redirect `http://localhost:3000/api/gmail/oauth/callback`
+2. Set `GMAIL_CLIENT_ID` + `GMAIL_CLIENT_SECRET` in `.env.local`
+3. Visit `http://localhost:3000/api/gmail/oauth/start`, finish consent, copy `GMAIL_REFRESH_TOKEN` into `.env.local`
+4. On each lane: set **Email senders** (allowlist) + GitHub **Repo URL**
+5. Poll with `GET/POST /api/cron/email-ingest` (Bearer `CRON_SECRET` in production) or ask the uplink to `ingest_emails`
+6. Flow: unread allowlisted email → code job / Cloud Agent / PR → **Needs you** → **Approve & reply** emails the sender
 
 ### Daily Skool / content drafts
 
@@ -101,4 +112,6 @@ npm run db:seed  # seed if empty
 4. ~~Voice push-to-talk / ambient wake word~~
 5. ~~Dispatch coding agents as workers~~
 6. ~~Daily content drafts + GA4 lane analytics~~
-7. Watchdogs / digests / PWA polish / Skool auto-publish (if/when a safe channel exists)
+7. ~~Daily content drafts + GA4 lane analytics~~
+8. ~~Gmail → code agents → approve → reply~~
+9. Watchdogs / digests / PWA polish / Skool auto-publish (if/when a safe channel exists)

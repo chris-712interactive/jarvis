@@ -34,6 +34,7 @@ export const projects = sqliteTable("projects", {
   dailyContent: integer("daily_content", { mode: "boolean" })
     .notNull()
     .default(false),
+  emailSenders: text("email_senders").notNull().default(""),
   interruptLevel: text("interrupt_level")
     .$type<InterruptLevel>()
     .notNull()
@@ -55,6 +56,13 @@ export const jobs = sqliteTable("jobs", {
   artifactUrl: text("artifact_url"),
   agentId: text("agent_id"),
   agentRunId: text("agent_run_id"),
+  emailMessageId: text("email_message_id"),
+  emailThreadId: text("email_thread_id"),
+  emailFrom: text("email_from"),
+  emailSubject: text("email_subject"),
+  emailReplySent: integer("email_reply_sent", { mode: "boolean" })
+    .notNull()
+    .default(false),
   interruptLevel: text("interrupt_level")
     .$type<InterruptLevel>()
     .notNull()

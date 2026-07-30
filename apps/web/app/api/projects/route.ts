@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     contentChannel: parsed.data.contentChannel ?? null,
     contentBrief: parsed.data.contentBrief ?? "",
     dailyContent: parsed.data.dailyContent ?? false,
+    emailSenders: parsed.data.emailSenders ?? "",
   });
 
   return NextResponse.json({ project }, { status: 201 });

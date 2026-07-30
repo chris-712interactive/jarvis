@@ -43,6 +43,11 @@ function migrateSchema(sqlite: Database.Database) {
       `ALTER TABLE projects ADD COLUMN daily_content INTEGER NOT NULL DEFAULT 0`,
     );
   }
+  if (!projectCols.some((column) => column.name === "email_senders")) {
+    sqlite.exec(
+      `ALTER TABLE projects ADD COLUMN email_senders TEXT NOT NULL DEFAULT ''`,
+    );
+  }
 
   const jobCols = tableColumns(sqlite, "jobs");
   if (!jobCols.some((column) => column.name === "brief")) {
@@ -53,6 +58,23 @@ function migrateSchema(sqlite: Database.Database) {
   }
   if (!jobCols.some((column) => column.name === "agent_run_id")) {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN agent_run_id TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "email_message_id")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN email_message_id TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "email_thread_id")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN email_thread_id TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "email_from")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN email_from TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "email_subject")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN email_subject TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "email_reply_sent")) {
+    sqlite.exec(
+      `ALTER TABLE jobs ADD COLUMN email_reply_sent INTEGER NOT NULL DEFAULT 0`,
+    );
   }
 
   sqlite.exec(`
@@ -91,6 +113,7 @@ function createSqlite() {
       content_channel TEXT,
       content_brief TEXT NOT NULL DEFAULT '',
       daily_content INTEGER NOT NULL DEFAULT 0,
+      email_senders TEXT NOT NULL DEFAULT '',
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -107,6 +130,11 @@ function createSqlite() {
       artifact_url TEXT,
       agent_id TEXT,
       agent_run_id TEXT,
+      email_message_id TEXT,
+      email_thread_id TEXT,
+      email_from TEXT,
+      email_subject TEXT,
+      email_reply_sent INTEGER NOT NULL DEFAULT 0,
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL

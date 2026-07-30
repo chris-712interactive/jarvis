@@ -1,23 +1,22 @@
 import { NextResponse } from "next/server";
 import { seedIfEmpty } from "@/lib/db/queries";
-import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
 import { authorizeCron, cronUnauthorized } from "@/lib/jobs/cron-auth";
+import { ingestInboundEmails } from "@/lib/jobs/email-ingest";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 async function run(request: Request) {
   if (!authorizeCron(request)) return cronUnauthorized();
-
   await seedIfEmpty();
   const { searchParams } = new URL(request.url);
-  const projectId = searchParams.get("projectId")?.trim() || undefined;
-  const force = searchParams.get("force") === "1" || searchParams.get("force") === "true";
-  const result = await queueDailyContentDrafts({ projectId, force });
+  const maxRaw = Number(searchParams.get("max") ?? "15");
+  const maxMessages = Number.isFinite(maxRaw) ? maxRaw : 15;
+  const result = await ingestInboundEmails({ maxMessages });
   return NextResponse.json({ ok: true, ...result });
 }
 
-/** Queue daily content drafts for lanes with dailyContent enabled. */
+/** Poll Gmail for allowlisted senders and queue Cloud Agent code jobs. */
 export async function POST(request: Request) {
   return run(request);
 }

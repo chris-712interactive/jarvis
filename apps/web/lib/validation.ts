@@ -54,6 +54,7 @@ export const createProjectSchema = z.object({
   contentChannel: optionalText,
   contentBrief: z.string().trim().max(4000).optional().default(""),
   dailyContent: optionalBool,
+  emailSenders: z.string().trim().max(4000).optional().default(""),
   interruptLevel: z.enum(interruptLevels).optional().default("digest"),
 });
 

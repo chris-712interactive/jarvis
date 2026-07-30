@@ -77,6 +77,11 @@ export default async function ProjectDetailPage({ params }: Params) {
                   {project.dailyContent ? " · daily on" : " · daily off"}
                 </p>
               ) : null}
+              {project.emailSenders?.trim() ? (
+                <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
+                  email // {project.emailSenders.trim()}
+                </p>
+              ) : null}
               {project.notes ? (
                 <p className="mt-6 whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">
                   {project.notes}
@@ -147,6 +152,7 @@ export default async function ProjectDetailPage({ params }: Params) {
                   contentChannel: project.contentChannel ?? "",
                   contentBrief: project.contentBrief ?? "",
                   dailyContent: Boolean(project.dailyContent),
+                  emailSenders: project.emailSenders ?? "",
                   interruptLevel: project.interruptLevel,
                 }}
               />
