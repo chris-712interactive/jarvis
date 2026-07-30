@@ -280,7 +280,7 @@ export async function seedIfEmpty() {
     repoUrl: "https://github.com/chris-712interactive/jarvis",
     notes: "Control plane + conversation + job tracking.",
     vaultPath: "fixtures/sample-vault",
-    needsYou: "Confirm Phase 1 dashboard direction and add your real projects.",
+    needsYou: null,
     interruptLevel: "nudge",
   });
 
@@ -312,8 +312,9 @@ export async function seedIfEmpty() {
     projectId: hub.id,
     title: "Review architecture decisions",
     kind: "research",
-    status: "needs_you",
-    summary: "Approve SQLite-for-now vs jump to Postgres, and auth choice.",
+    status: "done",
+    summary:
+      "Resolved: keep SQLite for local hub; defer auth until multi-user. Recorded in vault Home.md.",
     brief: "Decide storage and auth for the hub.",
     interruptLevel: "nudge",
   });

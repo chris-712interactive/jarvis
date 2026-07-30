@@ -15,8 +15,9 @@ Project Hub + dashboard shell in `apps/web`:
 - REST APIs under `/api/projects`, `/api/jobs`, `/api/chat`, `/api/conversations`, `/api/notifications`
 - Dashboard lanes: **Needs you** / **In flight** / **Projects** / Recent outcomes
 - Create + edit projects
-- **Obsidian vault path per project** + read-only notes browse/search API
+- **Obsidian vault path per project** + notes browse/search/read/write API
 - **Phase 2 chat uplink** grounded on a selected lane
+- **GitHub read adapters** — repo summary + open PRs (`GITHUB_TOKEN` optional)
 - **Phase 3 async jobs** from chat → In flight → Needs you / Recent + in-app notifications
 
 ### Chat + async jobs (Phase 2–3)
@@ -29,8 +30,9 @@ Project Hub + dashboard shell in `apps/web`:
 
 Operator tools:
 - dashboard / project / job status
-- `start_job` / `get_job` (async workforce)
-- Obsidian list, search, and read for the active lane
+- `start_job` / `get_job` / `resolve_job` (async workforce)
+- Obsidian list, search, read, write for the active lane
+- GitHub `get_repo_summary` / `list_open_prs` for lanes with a repo URL
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
 - `research` / `ops` / `message` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification

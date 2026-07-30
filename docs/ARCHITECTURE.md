@@ -257,25 +257,26 @@ Write answers to:
 - What is a “project” for me (repo? client? life area?)
 - Success metric for week 1 (e.g. “I can ask status across 5 projects and spawn one background coding job”)
 
-### Phase 1 — Project Hub + dashboard skeleton
+### Phase 1 — Project Hub + dashboard skeleton ✅
 
-- Auth
-- CRUD projects (name, repo URL, goals, status)
-- Manual status notes
+- ~~Auth~~ → deferred (local single-operator; add when multi-user needed)
+- CRUD projects (name, repo URL, goals, status, vault path)
+- Manual status notes / Needs you flags + Approve/Resolve
 - “Needs you / In flight / Projects” layout
-- No LLM required yet — still useful
+- No LLM required for the hub shell — still useful
 
-### Phase 2 — Chat with project grounding
+### Phase 2 — Chat with project grounding ✅
 
 - Streaming chat
-- Attach conversation to a project (or auto-route)
-- Retrieval over project notes + recent GitHub activity
-- Read-only tools: summarize repo, list open PRs, “what’s blocked?”
+- Attach conversation to a project (or auto-route by named lane)
+- Obsidian vault retrieval (list / search / read / write)
+- GitHub read adapters: repo summary + open PRs
+- Read-only status tools + async job tools
 
 ### Phase 3 — Async jobs (“while I’m busy”) ✅
 
 - Job table + local runner (`queued → running → done|needs_you`)
-- `start_job` / `get_job` from chat
+- `start_job` / `get_job` / `resolve_job` from chat
 - Dashboard poller + `/api/jobs/process`
 - In-app notifications (header Alerts); email/Telegram later
 - Resume via Needs you / Recent + job ids
@@ -284,7 +285,7 @@ Write answers to:
 
 - Push-to-talk in web
 - Ambient wake word (Web Speech)
-- Short spoken confirmations
+- Spoken replies (Speak on) + short confirmations
 
 ### Phase 5 — Real workforce
 

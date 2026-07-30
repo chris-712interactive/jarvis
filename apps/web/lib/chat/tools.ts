@@ -19,12 +19,23 @@ import {
   writeVaultNote,
   VaultError,
 } from "@/lib/vault/notes";
+import {
+  getRepoSummary,
+  listOpenPullRequests,
+  GitHubError,
+} from "@/lib/github/repo";
 import { jobKinds, interruptLevels } from "@/lib/db/schema";
 
 function vaultErrorMessage(error: unknown) {
   if (error instanceof VaultError) return error.message;
   if (error instanceof Error) return error.message;
   return "Vault read failed";
+}
+
+function githubErrorMessage(error: unknown) {
+  if (error instanceof GitHubError) return error.message;
+  if (error instanceof Error) return error.message;
+  return "GitHub request failed";
 }
 
 const laneFields = {
@@ -595,6 +606,87 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         } catch (error) {
           return { error: vaultErrorMessage(error) };
+        }
+      },
+    }),
+
+    get_repo_summary: tool({
+      description:
+        "Summarize the GitHub repo linked to a project lane (description, default branch, open issues, last push).",
+      inputSchema: z.object(laneFields),
+      execute: async ({ projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
+        if (!project.repoUrl) {
+          return {
+            error: `Project "${project.name}" has no repo URL configured.`,
+          };
+        }
+        try {
+          const summary = await getRepoSummary(project.repoUrl);
+          return {
+            matchedBy: resolved.matchedBy,
+            projectId: project.id,
+            projectName: project.name,
+            repoUrl: project.repoUrl,
+            summary,
+          };
+        } catch (error) {
+          return { error: githubErrorMessage(error) };
+        }
+      },
+    }),
+
+    list_open_prs: tool({
+      description:
+        "List open pull requests for the GitHub repo linked to a project lane.",
+      inputSchema: z.object({
+        ...laneFields,
+        limit: z.number().int().min(1).max(30).optional(),
+      }),
+      execute: async ({ projectId, lane, limit }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
+        if (!project.repoUrl) {
+          return {
+            error: `Project "${project.name}" has no repo URL configured.`,
+          };
+        }
+        try {
+          const pullRequests = await listOpenPullRequests(
+            project.repoUrl,
+            limit ?? 12,
+          );
+          return {
+            matchedBy: resolved.matchedBy,
+            projectId: project.id,
+            projectName: project.name,
+            repoUrl: project.repoUrl,
+            count: pullRequests.length,
+            pullRequests,
+          };
+        } catch (error) {
+          return { error: githubErrorMessage(error) };
         }
       },
     }),
