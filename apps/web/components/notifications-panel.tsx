@@ -40,6 +40,8 @@ export function NotificationsPanel() {
       };
       setItems(data.notifications);
       setUnreadCount(data.unreadCount);
+    } catch {
+      // Ignore transient network/HMR failures; the next poll retries.
     } finally {
       setLoading(false);
     }
@@ -54,21 +56,29 @@ export function NotificationsPanel() {
   }, [load]);
 
   async function markRead(id: string) {
-    await fetch(`/api/notifications/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ read: true }),
-    });
-    await load();
+    try {
+      await fetch(`/api/notifications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ read: true }),
+      });
+      await load();
+    } catch {
+      // Transient failure — user can retry Ack.
+    }
   }
 
   async function markAllRead() {
-    await fetch("/api/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markAllRead: true }),
-    });
-    await load();
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+      await load();
+    } catch {
+      // Transient failure — user can retry Clear.
+    }
   }
 
   return (
