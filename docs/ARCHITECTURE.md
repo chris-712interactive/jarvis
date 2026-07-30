@@ -287,12 +287,12 @@ Write answers to:
 - Ambient wake word (Web Speech)
 - Spoken replies (Speak on) + short confirmations
 
-### Phase 5 — Real workforce
+### Phase 5 — Real workforce ✅ (Cloud Agents)
 
-- Cursor Cloud Agents / sandboxed coding agents as job workers
-- PR creation + review summaries
-- Watchdogs for CI / deploys
-- Multi-project parallel lanes with interrupt budgets
+- Cursor Cloud Agents as job workers for `kind: code` (`CURSOR_API_KEY`)
+- PR creation via agent `autoCreatePR` + hub surfaces PR/agent URL on the job
+- Watchdogs for CI / deploys (next)
+- Multi-project parallel lanes with interrupt budgets (partial — parallel code jobs supported)
 
 ### Phase 6 — Personality & polish
 

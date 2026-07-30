@@ -1,6 +1,6 @@
 # Architecture decisions
 
-Working notes for Phase 1 → Phase 3 scaffold.
+Working notes for Phase 1 → Phase 5 scaffold.
 
 ## Done
 
@@ -12,9 +12,10 @@ Working notes for Phase 1 → Phase 3 scaffold.
 - Async jobs + notifications + Approve/Resolve on Priority
 - Voice push-to-talk + ambient wake word + speak replies
 - GitHub read adapters (`get_repo_summary`, `list_open_prs`)
+- Cursor Cloud Agents as coding workers (`kind: code` + `CURSOR_API_KEY`)
 
 ## Next
 
-- Coding agents as real job workers (Phase 5)
 - Optional auth when multi-device / multi-user is required
 - Email/Telegram notification channels
+- CI / deploy watchdogs + digests

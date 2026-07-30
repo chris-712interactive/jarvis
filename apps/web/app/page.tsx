@@ -54,8 +54,8 @@ export default async function HomePage() {
       </main>
       <footer className="mx-auto w-full max-w-[1400px] px-5 pb-8 sm:px-8">
         <div className="flex items-center justify-between gap-4 border-t border-beam/15 pt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft">
-          <span>hub // phase 3 async jobs online</span>
-          <span>coding agents next</span>
+          <span>hub // cloud agents online</span>
+          <span>code jobs → cursor workers</span>
         </div>
       </footer>
       <ChatPanel projects={data.projects} />

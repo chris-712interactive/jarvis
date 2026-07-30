@@ -11,7 +11,7 @@ async function tick() {
   return NextResponse.json({ ok: true, ...result });
 }
 
-/** Advance the local job runner (queued → running → done|needs_you + vault write). */
+/** Advance the local job runner (vault notes + Cloud Agent code jobs). */
 export async function POST() {
   return tick();
 }

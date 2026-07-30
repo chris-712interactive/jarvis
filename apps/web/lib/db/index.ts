@@ -32,6 +32,12 @@ function migrateSchema(sqlite: Database.Database) {
   if (!jobCols.some((column) => column.name === "brief")) {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN brief TEXT NOT NULL DEFAULT ''`);
   }
+  if (!jobCols.some((column) => column.name === "agent_id")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN agent_id TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "agent_run_id")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN agent_run_id TEXT`);
+  }
 
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS notifications (
@@ -79,6 +85,8 @@ function createSqlite() {
       summary TEXT NOT NULL DEFAULT '',
       brief TEXT NOT NULL DEFAULT '',
       artifact_url TEXT,
+      agent_id TEXT,
+      agent_run_id TEXT,
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL

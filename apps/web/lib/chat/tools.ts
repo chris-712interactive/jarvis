@@ -256,10 +256,16 @@ export function createOperatorTools(activeProjectId?: string | null) {
             brief: job.brief,
             interruptLevel: job.interruptLevel,
             artifactUrl: job.artifactUrl,
+            agentId: job.agentId,
+            agentRunId: job.agentRunId,
             updatedAt: job.updatedAt,
           },
           project: project
-            ? { id: project.id, name: project.name }
+            ? {
+                id: project.id,
+                name: project.name,
+                repoUrl: project.repoUrl,
+              }
             : null,
         };
       },
@@ -363,7 +369,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     start_job: tool({
       description:
-        "Start an async background job for a project lane. When the user names a lane, pass it as `lane` — do not rely on the UI dropdown. Prefer this for research, ops, drafts, and coding missions.",
+        "Start an async background job for a project lane. When the user names a lane, pass it as `lane` — do not rely on the UI dropdown. Prefer this for research, ops, drafts, and coding missions. Use kind `code` for implement/PR work — that launches a Cursor Cloud Agent when CURSOR_API_KEY and a GitHub repo URL are set.",
       inputSchema: z.object({
         title: z.string().min(1).max(200).describe("Short job title"),
         brief: z
@@ -374,7 +380,9 @@ export function createOperatorTools(activeProjectId?: string | null) {
         kind: z
           .enum(jobKinds)
           .optional()
-          .describe("code | research | ops | message. Defaults to ops."),
+          .describe(
+            "code (Cloud Agent) | research | ops | message. Defaults to ops. Prefer code for implement/fix/PR work.",
+          ),
         ...laneFields,
         interruptLevel: z
           .enum(interruptLevels)
@@ -414,26 +422,42 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
         const claimed = await kickJob(job.id);
 
+        const active = claimed ?? job;
+        const codeNote = (() => {
+          if (active.kind !== "code") return null;
+          if (active.agentId && active.artifactUrl) {
+            return `Cloud Agent launched for lane "${project.name}". Track it under In flight and at ${active.artifactUrl}.`;
+          }
+          if (active.status === "needs_you") {
+            return active.summary ||
+              `Code job needs setup on lane "${project.name}" (CURSOR_API_KEY and/or GitHub repo URL).`;
+          }
+          return `Code job is launching a Cloud Agent on lane "${project.name}". Watch In flight for the agent link.`;
+        })();
+
         return {
           started: true,
           matchedBy: resolved.matchedBy,
           job: {
-            id: (claimed ?? job).id,
-            title: (claimed ?? job).title,
-            kind: (claimed ?? job).kind,
-            status: (claimed ?? job).status,
-            summary: (claimed ?? job).summary,
-            brief: (claimed ?? job).brief,
+            id: active.id,
+            title: active.title,
+            kind: active.kind,
+            status: active.status,
+            summary: active.summary,
+            brief: active.brief,
+            artifactUrl: active.artifactUrl,
+            agentId: active.agentId,
+            agentRunId: active.agentRunId,
             projectId: project.id,
             projectName: project.name,
+            repoUrl: project.repoUrl,
             vaultPath: project.vaultPath,
           },
           note:
-            (claimed ?? job).kind === "code"
-              ? "Code jobs finish as needs_you until coding agents are wired."
-              : project.vaultPath
-                ? `Job is in flight on lane "${project.name}". When finished, a markdown note is written under Jarvis Jobs/ in that lane's vault.`
-                : `Job is in flight on lane "${project.name}", but that lane has no vault path — set one or the job will need you when it tries to write the note.`,
+            codeNote ??
+            (project.vaultPath
+              ? `Job is in flight on lane "${project.name}". When finished, a markdown note is written under Jarvis Jobs/ in that lane's vault.`
+              : `Job is in flight on lane "${project.name}", but that lane has no vault path — set one or the job will need you when it tries to write the note.`),
         };
       },
     }),

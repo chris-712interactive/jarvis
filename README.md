@@ -7,7 +7,7 @@ An AI command center for everything you’re working on — with a conversationa
 - [Architecture & build guide](docs/ARCHITECTURE.md)
 - [Product contract](docs/PRODUCT.md)
 
-## Phase 1–3 (implemented)
+## Phase 1–5 (implemented)
 
 Project Hub + dashboard shell in `apps/web`:
 
@@ -19,14 +19,16 @@ Project Hub + dashboard shell in `apps/web`:
 - **Phase 2 chat uplink** grounded on a selected lane
 - **GitHub read adapters** — repo summary + open PRs (`GITHUB_TOKEN` optional)
 - **Phase 3 async jobs** from chat → In flight → Needs you / Recent + in-app notifications
+- **Phase 5 coding workers** — `kind: code` jobs launch Cursor Cloud Agents (`CURSOR_API_KEY`)
 
-### Chat + async jobs (Phase 2–3)
+### Chat + async jobs (Phase 2–3 + 5)
 
 1. Copy `apps/web/.env.example` → `apps/web/.env.local`
 2. Set `OPENAI_API_KEY`
-3. `npm run dev` and click **Open uplink** on the command center
-4. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
-5. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
+3. For coding missions, also set `CURSOR_API_KEY` and put a GitHub repo URL on the lane
+4. `npm run dev` and click **Open uplink** on the command center
+5. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
+6. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
 
 Operator tools:
 - dashboard / project / job status
@@ -36,8 +38,8 @@ Operator tools:
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
 - `research` / `ops` / `message` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
-- `code` → `needs_you` until real coding agents are wired
-- Missing vault path → job lands in **Needs you** with a configure-vault message
+- `code` → launch a Cursor Cloud Agent against the lane’s GitHub repo (`CURSOR_API_KEY` required; repo must be connected in Cursor Integrations). Job stays **In flight** while the agent runs, then **done** (with PR link when available) or **needs_you** / **failed**
+- Missing vault path (non-code) or missing API key / repo URL (code) → **Needs you** with a configure message
 
 Chat can also call `write_vault_note` for short immediate writes (`POST /api/projects/:id/notes/write`).
 
@@ -75,4 +77,5 @@ npm run db:seed  # seed if empty
 2. ~~Project-grounded chat (read-only tools)~~
 3. ~~Async jobs + notifications~~
 4. ~~Voice push-to-talk / ambient wake word~~
-5. Dispatch coding agents as workers
+5. ~~Dispatch coding agents as workers~~
+6. Watchdogs / digests / PWA polish

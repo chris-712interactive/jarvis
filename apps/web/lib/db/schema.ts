@@ -47,6 +47,8 @@ export const jobs = sqliteTable("jobs", {
   summary: text("summary").notNull().default(""),
   brief: text("brief").notNull().default(""),
   artifactUrl: text("artifact_url"),
+  agentId: text("agent_id"),
+  agentRunId: text("agent_run_id"),
   interruptLevel: text("interrupt_level")
     .$type<InterruptLevel>()
     .notNull()

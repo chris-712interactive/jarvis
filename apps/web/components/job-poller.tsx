@@ -9,6 +9,7 @@ type ProcessPayload = {
   claimed?: string[];
   finished?: string[];
   skipped?: string[];
+  updated?: string[];
 };
 
 export function signalJobsChanged() {
@@ -37,6 +38,7 @@ export function JobPoller({ hasInFlight }: { hasInFlight: boolean }) {
         const moved =
           (data.claimed?.length ?? 0) > 0 ||
           (data.finished?.length ?? 0) > 0 ||
+          (data.updated?.length ?? 0) > 0 ||
           (data.skipped?.length ?? 0) > 0;
         if (forceRefresh || moved || hasInFlight) {
           router.refresh();

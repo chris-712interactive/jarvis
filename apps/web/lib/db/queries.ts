@@ -162,6 +162,8 @@ export type CreateJobInput = {
   summary?: string;
   brief?: string;
   artifactUrl?: string | null;
+  agentId?: string | null;
+  agentRunId?: string | null;
   interruptLevel?: InterruptLevel;
 };
 
@@ -177,6 +179,8 @@ export async function createJob(input: CreateJobInput) {
     summary: input.summary?.trim() ?? "",
     brief: input.brief?.trim() ?? "",
     artifactUrl: input.artifactUrl?.trim() || null,
+    agentId: input.agentId?.trim() || null,
+    agentRunId: input.agentRunId?.trim() || null,
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
     updatedAt: now,
@@ -192,6 +196,8 @@ export type UpdateJobInput = {
   summary?: string;
   brief?: string;
   artifactUrl?: string | null;
+  agentId?: string | null;
+  agentRunId?: string | null;
   interruptLevel?: InterruptLevel;
 };
 
@@ -211,6 +217,14 @@ export async function updateJob(id: string, input: UpdateJobInput) {
       input.artifactUrl !== undefined
         ? input.artifactUrl?.trim() || null
         : existing.artifactUrl,
+    agentId:
+      input.agentId !== undefined
+        ? input.agentId?.trim() || null
+        : existing.agentId,
+    agentRunId:
+      input.agentRunId !== undefined
+        ? input.agentRunId?.trim() || null
+        : existing.agentRunId,
     interruptLevel: input.interruptLevel ?? existing.interruptLevel,
     updatedAt: new Date(),
   };

@@ -436,6 +436,16 @@ export function InFlightSection({ jobs }: { jobs: JobWithProject[] }) {
                       {job.project?.name ?? "Unknown project"}
                       {job.summary ? ` — ${job.summary}` : ""}
                     </p>
+                    {job.artifactUrl?.startsWith("http") ? (
+                      <a
+                        href={job.artifactUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-block font-mono text-[11px] text-flight underline-offset-2 hover:underline"
+                      >
+                        open agent →
+                      </a>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 pl-5 sm:pl-0">
@@ -529,9 +539,22 @@ export function RecentSection({ jobs }: { jobs: JobWithProject[] }) {
                 {job.project?.name ?? "Project"} · {formatRelative(job.updatedAt)}
               </p>
               {job.artifactUrl ? (
-                <p className="mt-1 font-mono text-[11px] text-flight">
-                  vault // {job.artifactUrl}
-                </p>
+                job.artifactUrl.startsWith("http") ? (
+                  <a
+                    href={job.artifactUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block font-mono text-[11px] text-flight underline-offset-2 hover:underline"
+                  >
+                    {job.artifactUrl.includes("pull")
+                      ? "pr // open →"
+                      : "agent // open →"}
+                  </a>
+                ) : (
+                  <p className="mt-1 font-mono text-[11px] text-flight">
+                    vault // {job.artifactUrl}
+                  </p>
+                )
               ) : job.summary ? (
                 <p className="mt-1 text-xs text-ink-soft line-clamp-2">{job.summary}</p>
               ) : null}
