@@ -1,0 +1,15 @@
+{
+  "name": "jarvis",
+  "private": true,
+  "description": "Jarvis monorepo — the deployable app lives in apps/web",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "postinstall": "npm ci --prefix apps/web",
+    "build": "npm run build --prefix apps/web",
+    "start": "npm run start --prefix apps/web",
+    "lint": "npm run lint --prefix apps/web",
+    "dev": "npm run dev --prefix apps/web"
+  }
+}

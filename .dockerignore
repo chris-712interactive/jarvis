@@ -1,0 +1,13 @@
+.git
+**/node_modules
+**/.next
+**/data
+**/.env
+**/.env.*
+!**/.env.example
+**/fixtures/sample-vault/.obsidian
+*.md
+!apps/web/fixtures/**/*.md
+AGENTS.md
+docs
+scripts

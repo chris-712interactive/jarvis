@@ -6,7 +6,7 @@ An AI command center for everything you’re working on — with a conversationa
 
 - [Architecture & build guide](docs/ARCHITECTURE.md)
 - [Product contract](docs/PRODUCT.md)
-- [Deploy + cron](docs/DEPLOY.md)
+- [Deploy + cron (Railway / VPS)](docs/DEPLOY.md)
 
 ## Phase 1–5 + content/analytics (implemented)
 

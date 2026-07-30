@@ -1,0 +1,15 @@
+# Railway / Nixpacks / Docker deploy for Jarvis (apps/web).
+#
+# Preferred: leave Root Directory blank and use this Dockerfile.
+# Alternative: set Root Directory to /apps/web and use Nixpacks (see nixpacks.toml).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+watchPatterns = ["apps/web/**", "Dockerfile", "package.json", "railway.toml"]
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
