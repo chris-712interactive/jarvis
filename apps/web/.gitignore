@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# Local GCP service account keys (never commit)
+/lib/google/**/*.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*

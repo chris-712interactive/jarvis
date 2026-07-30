@@ -25,3 +25,6 @@ yarn-error.log*
 # Vercel
 .vercel
 apps/web/fixtures/sample-vault/Jarvis Jobs/
+
+# Local GCP service account keys (never commit)
+apps/web/lib/google/**/*.json
