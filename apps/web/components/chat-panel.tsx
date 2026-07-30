@@ -296,6 +296,8 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
         return (
           type.includes("start_job") ||
           type.includes("write_vault_note") ||
+          type.includes("resolve_job") ||
+          type.includes("clear_needs_you") ||
           type.includes("get_job")
         );
       }),

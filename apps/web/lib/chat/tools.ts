@@ -7,6 +7,8 @@ import {
   getProject,
   listJobs,
   listProjects,
+  updateJob,
+  updateProject,
 } from "@/lib/db/queries";
 import { kickJob } from "@/lib/jobs/runner";
 import { resolveLane } from "@/lib/chat/resolve-lane";
@@ -247,6 +249,102 @@ export function createOperatorTools(activeProjectId?: string | null) {
           },
           project: project
             ? { id: project.id, name: project.name }
+            : null,
+        };
+      },
+    }),
+
+    resolve_job: tool({
+      description:
+        "Mark a priority job as approved/done so it leaves Needs you. Use when the user approves a decision, architecture choice, or clears a blocked job. Prefer jobId from list_jobs / get_dashboard_status; title match is a fallback.",
+      inputSchema: z.object({
+        jobId: z.string().optional().describe("Exact job id when known"),
+        title: z
+          .string()
+          .optional()
+          .describe("Job title to match if id is unknown"),
+        note: z
+          .string()
+          .optional()
+          .describe("Optional resolution note saved on the job summary"),
+      }),
+      execute: async ({ jobId, title, note }) => {
+        let job = jobId ? await getJob(jobId) : null;
+        if (!job && title?.trim()) {
+          const needle = title.trim().toLowerCase();
+          const open = await listJobs({ status: ["needs_you", "failed"] });
+          const matches = open.filter((j) =>
+            j.title.toLowerCase().includes(needle),
+          );
+          if (matches.length === 1) job = matches[0];
+          else if (matches.length > 1) {
+            return {
+              error: "Multiple matching priority jobs. Pass jobId.",
+              candidates: matches.map((j) => ({
+                id: j.id,
+                title: j.title,
+                status: j.status,
+              })),
+            };
+          }
+        }
+        if (!job) {
+          return {
+            error:
+              "Job not found. Use get_dashboard_status or list_jobs with status needs_you.",
+          };
+        }
+
+        const summary =
+          note?.trim() ||
+          `Approved / resolved by operator. (${job.title})`;
+        const updated = await updateJob(job.id, {
+          status: "done",
+          summary,
+        });
+        return {
+          resolved: true,
+          job: updated
+            ? {
+                id: updated.id,
+                title: updated.title,
+                status: updated.status,
+                summary: updated.summary,
+              }
+            : null,
+        };
+      },
+    }),
+
+    clear_needs_you: tool({
+      description:
+        "Clear a project lane's Needs you flag so the project alert leaves Priority. Pass lane name when the user names one.",
+      inputSchema: z.object({
+        ...laneFields,
+      }),
+      execute: async ({ projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const updated = await updateProject(resolved.project.id, {
+          needsYou: null,
+        });
+        return {
+          cleared: true,
+          project: updated
+            ? {
+                id: updated.id,
+                name: updated.name,
+                needsYou: updated.needsYou,
+              }
             : null,
         };
       },
