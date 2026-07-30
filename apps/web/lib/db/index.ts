@@ -1,28 +1,73 @@
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
+import { drizzle } from "drizzle-orm/node-sqlite";
 import * as schema from "./schema";
 
-const dataDir = path.join(process.cwd(), "data");
+const dataDir = path.join(/* turbopackIgnore: true */ process.cwd(), "data");
 const dbPath = process.env.JARVIS_DB_PATH ?? path.join(dataDir, "jarvis.db");
+
+/**
+ * Drizzle's node-sqlite driver calls StatementSync#setReturnArrays (Node 24+).
+ * Polyfill on Node 22 so local/dev still works; Railway image uses Node 24.
+ */
+function patchNodeSqliteStatementApi() {
+  const probe = new DatabaseSync(":memory:");
+  try {
+    const stmt = probe.prepare("select 1 as value");
+    const proto = Object.getPrototypeOf(stmt) as {
+      setReturnArrays?: (value: boolean) => unknown;
+      all: (...params: unknown[]) => unknown;
+      get: (...params: unknown[]) => unknown;
+    };
+    if (typeof proto.setReturnArrays === "function") return;
+
+    const mode = new WeakMap<object, boolean>();
+    proto.setReturnArrays = function setReturnArrays(this: object, value: boolean) {
+      mode.set(this, Boolean(value));
+      return this;
+    };
+
+    const originalAll = proto.all;
+    proto.all = function all(this: object, ...params: unknown[]) {
+      const rows = originalAll.apply(this, params) as unknown;
+      if (!mode.get(this) || !Array.isArray(rows)) return rows;
+      return rows.map((row) =>
+        row && typeof row === "object" ? Object.values(row as object) : row,
+      );
+    };
+
+    const originalGet = proto.get;
+    proto.get = function get(this: object, ...params: unknown[]) {
+      const row = originalGet.apply(this, params) as unknown;
+      if (!mode.get(this) || !row || typeof row !== "object") return row;
+      return Object.values(row as object);
+    };
+  } finally {
+    probe.close();
+  }
+}
+
+patchNodeSqliteStatementApi();
 
 function ensureDatabaseFile() {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 }
 
 declare global {
-  var __jarvisSqlite: Database.Database | undefined;
-  var __jarvisDb: ReturnType<typeof drizzle<typeof schema>> | undefined;
+  // eslint-disable-next-line no-var
+  var __jarvisSqlite: DatabaseSync | undefined;
+  // eslint-disable-next-line no-var
+  var __jarvisDb: ReturnType<typeof drizzle> | undefined;
 }
 
-function tableColumns(sqlite: Database.Database, table: string) {
+function tableColumns(sqlite: DatabaseSync, table: string) {
   return sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{
     name: string;
   }>;
 }
 
-function migrateSchema(sqlite: Database.Database) {
+function migrateSchema(sqlite: DatabaseSync) {
   const projectCols = tableColumns(sqlite, "projects");
   if (!projectCols.some((column) => column.name === "vault_path")) {
     sqlite.exec(`ALTER TABLE projects ADD COLUMN vault_path TEXT`);
@@ -98,9 +143,10 @@ function migrateSchema(sqlite: Database.Database) {
 
 function createSqlite() {
   ensureDatabaseFile();
-  const sqlite = new Database(dbPath);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
+  // Node built-in SQLite — no native addon (avoids better-sqlite3 segfaults on Railway).
+  const sqlite = new DatabaseSync(dbPath);
+  sqlite.exec("PRAGMA journal_mode = WAL;");
+  sqlite.exec("PRAGMA foreign_keys = ON;");
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY NOT NULL,
@@ -194,7 +240,7 @@ function getSqlite() {
 
 export function getDb() {
   if (!globalThis.__jarvisDb) {
-    globalThis.__jarvisDb = drizzle(getSqlite(), { schema });
+    globalThis.__jarvisDb = drizzle({ client: getSqlite() });
   }
   return globalThis.__jarvisDb;
 }

@@ -1,15 +1,15 @@
 # Deploy Jarvis
 
-Jarvis uses **SQLite + `better-sqlite3`** (a native Node module). That means it needs a **persistent Node host**, not a vanilla Vercel serverless deployment.
+Jarvis uses **SQLite via Node’s built-in `node:sqlite`** (Node **22+**, Railway image is **Node 24**). That means it needs a **persistent Node host** with a writable disk for the DB file — not a vanilla Vercel serverless deployment. (We intentionally do **not** use `better-sqlite3`; native addons were segfaulting on Railway.)
 
 ## Can Vercel do this?
 
-**Not with the current stack.** Vanilla Vercel serverless has an ephemeral filesystem, awkward native-module support, and no durable SQLite/Obsidian disk. Deploy on Railway / Fly / Render / a VPS instead. A later Postgres/Turso + remote vault migration would be required before Vercel is realistic.
+**Not with the current stack.** Vanilla Vercel serverless has an ephemeral filesystem and no durable SQLite/Obsidian disk. Deploy on Railway / Fly / Render / a VPS instead. A later Postgres/Turso + remote vault migration would be required before Vercel is realistic.
 
 ## Recommended hosts
 
 - **Railway** (path of least resistance — this repo includes `Dockerfile` + `railway.toml`)
-- Fly.io / Render / a small VPS with Node 20+
+- Fly.io / Render / a small VPS with **Node 22+** (24+ recommended)
 - Mount a volume for `/data` (SQLite + optional Obsidian vault)
 - Point each lane’s `vaultPath` at a mounted Obsidian folder if you want notes in prod
 

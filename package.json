@@ -3,7 +3,7 @@
   "private": true,
   "description": "Jarvis monorepo — the deployable app lives in apps/web",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "postinstall": "npm ci --prefix apps/web",

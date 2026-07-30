@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "next dev",
@@ -16,8 +16,7 @@
     "@ai-sdk/openai": "^4.0.23",
     "@ai-sdk/react": "^4.0.44",
     "ai": "^7.0.41",
-    "better-sqlite3": "^13.0.1",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^1.0.0-rc.4",
     "nanoid": "^5.1.5",
     "next": "16.2.12",
     "octokit": "^5.0.5",
@@ -29,8 +28,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^20",
+    "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.10",

@@ -1,8 +1,8 @@
 # Used when Railway Root Directory is set to /apps/web (Nixpacks path).
-# Prefer the root Dockerfile + railway.toml for fewer surprises with better-sqlite3.
+# Prefer the root Dockerfile + railway.toml (Node 24).
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake"]
+nixPkgs = ["nodejs_24"]
 
 [phases.install]
 cmds = ["npm ci"]
