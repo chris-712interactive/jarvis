@@ -1,0 +1,68 @@
+name: Jarvis cron tick
+
+# Pings the deployed Jarvis /api/cron/tick on a schedule.
+# Keep the Railway web service always-on (do NOT put Cron Schedule on that service).
+
+on:
+  schedule:
+    # Every 10 minutes (UTC). GitHub can delay scheduled jobs under load.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_briefing:
+        description: "Pass forceBriefing=1"
+        type: boolean
+        default: false
+      skip_watchdog:
+        description: "Pass skipWatchdog=1"
+        type: boolean
+        default: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /api/cron/tick
+        env:
+          JARVIS_URL: ${{ secrets.JARVIS_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          FORCE_BRIEFING: ${{ inputs.force_briefing }}
+          SKIP_WATCHDOG: ${{ inputs.skip_watchdog }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${JARVIS_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing secrets. Add JARVIS_URL and CRON_SECRET in repo Settings → Secrets."
+            exit 1
+          fi
+
+          BASE="${JARVIS_URL%/}"
+          QS=()
+          if [ "${FORCE_BRIEFING:-false}" = "true" ]; then
+            QS+=("forceBriefing=1")
+          fi
+          if [ "${SKIP_WATCHDOG:-false}" = "true" ]; then
+            QS+=("skipWatchdog=1")
+          fi
+
+          URL="${BASE}/api/cron/tick"
+          if [ ${#QS[@]} -gt 0 ]; then
+            URL="${URL}?$(IFS='&'; echo "${QS[*]}")"
+          fi
+
+          echo "POST ${URL}"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json" \
+            --max-time 120 \
+            "${URL}" | tee /tmp/jarvis-tick.json
+
+          python3 - <<'PY'
+          import json, sys
+          data = json.load(open("/tmp/jarvis-tick.json"))
+          if not data.get("ok", True) and "jobs" not in data:
+              print("Unexpected response:", data)
+              sys.exit(1)
+          print("tick ok")
+          PY

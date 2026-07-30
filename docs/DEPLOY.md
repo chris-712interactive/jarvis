@@ -60,7 +60,24 @@ GMAIL_OAUTH_REDIRECT_URI=https://YOUR_RAILWAY_DOMAIN/api/gmail/oauth/callback
 
 ### 4. Cron (required for always-on)
 
-Railway cron job or any external ping every 5–15 minutes:
+**Do not** put Railway “Cron Schedule” on the Jarvis web service — that turns it into a short-lived job. Keep Jarvis always-on, and ping tick from outside.
+
+#### Option A — GitHub Actions (recommended)
+
+This repo includes [`.github/workflows/jarvis-cron.yml`](../.github/workflows/jarvis-cron.yml).
+
+1. GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**
+2. Add:
+   - `JARVIS_URL` — your public Railway URL, e.g. `https://jarvis-production-xxxx.up.railway.app` (no trailing slash)
+   - `CRON_SECRET` — **same value** as Railway’s `CRON_SECRET`
+3. Open **Actions → Jarvis cron tick → Run workflow** once to verify
+4. The schedule runs every **10 minutes (UTC)** automatically
+
+Note: GitHub scheduled workflows can drift/delay; for tighter timing use cron-job.org instead.
+
+#### Option B — any external curl
+
+Every 5–15 minutes:
 
 ```bash
 curl -fsS -X POST \
