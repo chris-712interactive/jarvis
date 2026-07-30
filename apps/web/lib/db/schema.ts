@@ -60,6 +60,7 @@ export const jobs = sqliteTable("jobs", {
   emailThreadId: text("email_thread_id"),
   emailFrom: text("email_from"),
   emailSubject: text("email_subject"),
+  emailReplyDraft: text("email_reply_draft"),
   emailReplySent: integer("email_reply_sent", { mode: "boolean" })
     .notNull()
     .default(false),

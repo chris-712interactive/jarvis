@@ -55,7 +55,10 @@ Local job runner (`POST /api/jobs/process`, also kicked on create and by the das
 3. Visit `http://localhost:3000/api/gmail/oauth/start`, finish consent, copy `GMAIL_REFRESH_TOKEN` into `.env.local`
 4. On each lane: set **Email senders** (allowlist) + GitHub **Repo URL**
 5. Poll with `GET/POST /api/cron/email-ingest` (Bearer `CRON_SECRET` in production) or ask the uplink to `ingest_emails`
-6. Flow: unread allowlisted email → code job / Cloud Agent / PR → **Needs you** → **Approve & reply** emails the sender
+6. Flow:
+   - **code** intent → Cloud Agent / PR → **Needs you** → **Approve & reply**
+   - **question** intent → draft reply in **Needs you** → **Approve & reply**
+   - **ambiguous** → triage in **Needs you** (Resolve clears without emailing)
 
 ### Daily Skool / content drafts
 

@@ -28,17 +28,31 @@ function buildCompletionReply(job: Job, projectName: string) {
   return lines.join("\n");
 }
 
+function resolveReplyBody(job: Job, projectName: string): string | null {
+  const draft = job.emailReplyDraft?.trim();
+  if (draft) return draft;
+
+  // Code missions get a completion notice when no custom draft exists.
+  if (job.kind === "code") {
+    return buildCompletionReply(job, projectName);
+  }
+
+  // Triage / ambiguous items: resolving clears the queue without emailing.
+  return null;
+}
+
 export type ResolveJobResult = {
   job: Job;
   emailReply: {
     attempted: boolean;
     sent: boolean;
+    skipped: boolean;
     error: string | null;
   };
 };
 
 /**
- * Mark a job done and, for email-originated work, send the completion reply.
+ * Mark a job done and, for email-originated work with a reply body, send it.
  */
 export async function resolveJobWithSideEffects(
   jobId: string,
@@ -60,6 +74,7 @@ export async function resolveJobWithSideEffects(
   const emailReply = {
     attempted: false,
     sent: false,
+    skipped: false,
     error: null as string | null,
   };
 
@@ -69,17 +84,28 @@ export async function resolveJobWithSideEffects(
     job.emailFrom &&
     !job.emailReplySent
   ) {
+    const project = await getProject(job.projectId);
+    const body = resolveReplyBody(job, project?.name || "the project");
+
+    if (!body) {
+      emailReply.skipped = true;
+      job =
+        (await updateJob(job.id, {
+          summary: `${summary} · No email reply sent (triage/clear only).`,
+        })) ?? job;
+      return { job, emailReply };
+    }
+
     emailReply.attempted = true;
     if (!isGmailConfigured()) {
       emailReply.error =
-        "Gmail not configured — completion reply was not sent.";
+        "Gmail not configured — reply was not sent.";
     } else {
       try {
-        const project = await getProject(job.projectId);
         await sendReply({
           to: job.emailFrom,
           subject: job.emailSubject || job.title,
-          body: buildCompletionReply(job, project?.name || "the project"),
+          body,
           threadId: job.emailThreadId,
           inReplyToMessageId: job.emailMessageId,
         });
@@ -91,7 +117,7 @@ export async function resolveJobWithSideEffects(
         emailReply.sent = true;
         await createNotification({
           title: `Reply sent: ${job.title}`,
-          body: `Emailed ${job.emailFrom} that work is complete.`,
+          body: `Emailed ${job.emailFrom}.`,
           level: "digest",
           projectId: job.projectId,
           jobId: job.id,

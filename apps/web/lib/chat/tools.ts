@@ -839,7 +839,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     ingest_emails: tool({
       description:
-        "Poll Gmail for unread messages from allowlisted senders on project lanes, queue code jobs (Cloud Agents), and notify the operator. Requires Gmail OAuth env vars.",
+        "Poll Gmail for unread messages from allowlisted senders, classify each as code vs question vs ambiguous, then queue the right job. Requires Gmail OAuth env vars.",
       inputSchema: z.object({
         max: z
           .number()
@@ -861,7 +861,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           ...result,
           note:
             result.queued.length > 0
-              ? `Queued ${result.queued.length} email code job(s). Watch In flight, then Approve in Needs you to reply to the sender.`
+              ? `Queued ${result.queued.length} email job(s). Code runs agents; questions land as draft replies in Needs you; ambiguous needs triage.`
               : "No new allowlisted emails queued.",
         };
       },

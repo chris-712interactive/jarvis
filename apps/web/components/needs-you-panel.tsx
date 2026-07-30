@@ -164,8 +164,17 @@ export function NeedsYouSection({
                     {job.emailFrom ? (
                       <p className="mt-2 font-mono text-[11px] text-ink-soft">
                         email // {job.emailFrom}
-                        {job.emailReplySent ? " · reply sent" : " · approve to reply"}
+                        {job.emailReplySent
+                          ? " · reply sent"
+                          : job.emailReplyDraft
+                            ? " · draft reply ready"
+                            : " · triage"}
                       </p>
+                    ) : null}
+                    {job.emailReplyDraft ? (
+                      <pre className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap border border-beam/15 bg-[color-mix(in_oklab,var(--panel)_80%,transparent)] px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-soft">
+                        {job.emailReplyDraft}
+                      </pre>
                     ) : null}
                   </div>
                 </div>
@@ -181,9 +190,11 @@ export function NeedsYouSection({
                   >
                     {pendingId === `j-${job.id}`
                       ? "…"
-                      : job.emailFrom && !job.emailReplySent
+                      : job.emailFrom && job.emailReplyDraft && !job.emailReplySent
                         ? "Approve & reply"
-                        : "Approve"}
+                        : job.emailFrom && !job.emailReplyDraft
+                          ? "Resolve"
+                          : "Approve"}
                   </button>
                 </div>
               </div>

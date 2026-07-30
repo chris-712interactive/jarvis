@@ -71,6 +71,9 @@ function migrateSchema(sqlite: Database.Database) {
   if (!jobCols.some((column) => column.name === "email_subject")) {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN email_subject TEXT`);
   }
+  if (!jobCols.some((column) => column.name === "email_reply_draft")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN email_reply_draft TEXT`);
+  }
   if (!jobCols.some((column) => column.name === "email_reply_sent")) {
     sqlite.exec(
       `ALTER TABLE jobs ADD COLUMN email_reply_sent INTEGER NOT NULL DEFAULT 0`,
@@ -134,6 +137,7 @@ function createSqlite() {
       email_thread_id TEXT,
       email_from TEXT,
       email_subject TEXT,
+      email_reply_draft TEXT,
       email_reply_sent INTEGER NOT NULL DEFAULT 0,
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,

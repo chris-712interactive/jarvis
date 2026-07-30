@@ -302,11 +302,12 @@ Write answers to:
 - GA4 read adapter (`gaPropertyId` + service account) for “what’s working” per lane
 - Cron endpoint `/api/cron/daily-content`
 
-### Phase 6b — Gmail workforce ✅ (approve-gated reply)
+### Phase 6b — Gmail workforce ✅ (intent + approve-gated reply)
 
 - Allowlisted senders per lane (`emailSenders`)
-- Ingest cron `/api/cron/email-ingest` → code job → Cloud Agent PR
-- Operator **Approve & reply** sends completion email on the same thread
+- Intent router: code vs question vs ambiguous (`lib/jobs/email-intent.ts`)
+- Ingest cron `/api/cron/email-ingest` → code agent / draft reply / triage
+- Operator **Approve & reply** sends completion or drafted answer on the same thread
 
 ### Phase 7 — Personality & polish
 

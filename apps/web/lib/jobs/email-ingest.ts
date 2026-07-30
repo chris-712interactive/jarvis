@@ -6,6 +6,10 @@ import {
 import { createNotification } from "@/lib/db/notifications";
 import { kickJob } from "@/lib/jobs/runner";
 import {
+  classifyEmailIntent,
+  draftQuestionReply,
+} from "@/lib/jobs/email-intent";
+import {
   GmailError,
   getMessage,
   isGmailConfigured,
@@ -29,7 +33,7 @@ function buildSenderIndex(projects: Project[]) {
   return map;
 }
 
-function buildEmailBrief(message: GmailMessage, project: Project) {
+function buildCodeBrief(message: GmailMessage, project: Project) {
   return [
     `Inbound email for lane "${project.name}".`,
     `From: ${message.from}`,
@@ -47,9 +51,42 @@ function buildEmailBrief(message: GmailMessage, project: Project) {
     .join("\n");
 }
 
-function jobTitleFromSubject(subject: string) {
+function buildQuestionBrief(message: GmailMessage, project: Project) {
+  return [
+    `Inbound QUESTION email for lane "${project.name}".`,
+    `From: ${message.from}`,
+    `Subject: ${message.subject}`,
+    message.date ? `Date: ${message.date}` : null,
+    "",
+    "This was classified as a question (not a code change).",
+    "A draft reply is attached for operator approval.",
+    "",
+    "—— Email body ——",
+    message.bodyText.slice(0, 6000) || message.snippet || "(empty body)",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildAmbiguousBrief(message: GmailMessage, project: Project, reason: string) {
+  return [
+    `Inbound email for lane "${project.name}" needs triage.`,
+    `From: ${message.from}`,
+    `Subject: ${message.subject}`,
+    `Classifier: ${reason}`,
+    "",
+    "Decide whether this is a code change or a question, then start the right job or edit a reply draft.",
+    "",
+    "—— Email body ——",
+    message.bodyText.slice(0, 6000) || message.snippet || "(empty body)",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function jobTitleFromSubject(prefix: string, subject: string) {
   const cleaned = subject.replace(/\s+/g, " ").trim() || "email request";
-  return `Email: ${cleaned}`.slice(0, 200);
+  return `${prefix}: ${cleaned}`.slice(0, 200);
 }
 
 export type EmailIngestResult = {
@@ -61,12 +98,13 @@ export type EmailIngestResult = {
     projectName: string;
     from: string;
     subject: string;
+    intent: string;
   }>;
   skipped: Array<{ messageId: string; reason: string; from?: string }>;
   errors: Array<{ messageId?: string; error: string }>;
 };
 
-/** Poll Gmail for allowlisted senders and queue code jobs. */
+/** Poll Gmail for allowlisted senders and route by intent. */
 export async function ingestInboundEmails(
   options?: { maxMessages?: number },
 ): Promise<EmailIngestResult> {
@@ -98,7 +136,6 @@ export async function ingestInboundEmails(
   }
 
   const maxMessages = Math.min(Math.max(options?.maxMessages ?? 15, 1), 40);
-  // Newer unread mail not yet labeled by Jarvis.
   const ids = await listRecentMessageIds(
     "is:unread -label:Jarvis/Processed",
     maxMessages,
@@ -137,47 +174,123 @@ export async function ingestInboundEmails(
       }
 
       const project = matches[0];
-      if (!project.repoUrl?.trim()) {
-        result.skipped.push({
-          messageId: entry.id,
+      const classified = await classifyEmailIntent(message, project);
+      const interruptLevel =
+        project.interruptLevel === "silent" ? "nudge" : project.interruptLevel;
+
+      if (classified.intent === "code") {
+        if (!project.repoUrl?.trim()) {
+          result.skipped.push({
+            messageId: entry.id,
+            from: message.fromEmail,
+            reason: `Code intent, but lane "${project.name}" has no GitHub repo URL`,
+          });
+          continue;
+        }
+
+        const job = await createJob({
+          projectId: project.id,
+          title: jobTitleFromSubject("Email code", message.subject),
+          kind: "code",
+          status: "queued",
+          brief: buildCodeBrief(message, project),
+          summary: `Queued code job from email (${message.fromEmail}). ${classified.reason}`,
+          emailMessageId: message.id,
+          emailThreadId: message.threadId,
+          emailFrom: message.fromEmail,
+          emailSubject: message.subject,
+          interruptLevel,
+        });
+
+        const claimed = await kickJob(job.id);
+        await markMessageProcessed(message.id);
+        await createNotification({
+          title: `Email → code: ${project.name}`,
+          body: `From ${message.fromEmail}: ${message.subject}`,
+          level: "nudge",
+          projectId: project.id,
+          jobId: (claimed ?? job).id,
+        });
+
+        result.queued.push({
+          jobId: (claimed ?? job).id,
+          projectId: project.id,
+          projectName: project.name,
           from: message.fromEmail,
-          reason: `Lane "${project.name}" has no GitHub repo URL`,
+          subject: message.subject,
+          intent: "code",
         });
         continue;
       }
 
+      if (classified.intent === "question") {
+        const draft = await draftQuestionReply(message, project);
+        const job = await createJob({
+          projectId: project.id,
+          title: jobTitleFromSubject("Email Q", message.subject),
+          kind: "ops",
+          status: "needs_you",
+          brief: buildQuestionBrief(message, project),
+          summary: `Question email — draft reply ready. Approve & reply to send. (${classified.reason})`,
+          emailMessageId: message.id,
+          emailThreadId: message.threadId,
+          emailFrom: message.fromEmail,
+          emailSubject: message.subject,
+          emailReplyDraft: draft,
+          interruptLevel,
+        });
+
+        await markMessageProcessed(message.id);
+        await createNotification({
+          title: `Email question: ${project.name}`,
+          body: `From ${message.fromEmail}: ${message.subject}. Draft reply waiting for Approve.`,
+          level: "nudge",
+          projectId: project.id,
+          jobId: job.id,
+        });
+
+        result.queued.push({
+          jobId: job.id,
+          projectId: project.id,
+          projectName: project.name,
+          from: message.fromEmail,
+          subject: message.subject,
+          intent: "question",
+        });
+        continue;
+      }
+
+      // ambiguous — park for human triage; do not auto-reply or launch agents
       const job = await createJob({
         projectId: project.id,
-        title: jobTitleFromSubject(message.subject),
-        kind: "code",
-        status: "queued",
-        brief: buildEmailBrief(message, project),
-        summary: `Queued from email (${message.fromEmail}).`,
+        title: jobTitleFromSubject("Email triage", message.subject),
+        kind: "ops",
+        status: "needs_you",
+        brief: buildAmbiguousBrief(message, project, classified.reason),
+        summary: `Ambiguous email — decide if this is a question or a code change. (${classified.reason})`,
         emailMessageId: message.id,
         emailThreadId: message.threadId,
         emailFrom: message.fromEmail,
         emailSubject: message.subject,
-        interruptLevel:
-          project.interruptLevel === "silent" ? "nudge" : project.interruptLevel,
+        interruptLevel,
       });
 
-      const claimed = await kickJob(job.id);
       await markMessageProcessed(message.id);
-
       await createNotification({
-        title: `Email → code: ${project.name}`,
+        title: `Email triage: ${project.name}`,
         body: `From ${message.fromEmail}: ${message.subject}`,
         level: "nudge",
         projectId: project.id,
-        jobId: (claimed ?? job).id,
+        jobId: job.id,
       });
 
       result.queued.push({
-        jobId: (claimed ?? job).id,
+        jobId: job.id,
         projectId: project.id,
         projectName: project.name,
         from: message.fromEmail,
         subject: message.subject,
+        intent: "ambiguous",
       });
     } catch (error) {
       const message =

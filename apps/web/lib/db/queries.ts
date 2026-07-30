@@ -208,6 +208,7 @@ export type CreateJobInput = {
   emailThreadId?: string | null;
   emailFrom?: string | null;
   emailSubject?: string | null;
+  emailReplyDraft?: string | null;
   emailReplySent?: boolean;
   interruptLevel?: InterruptLevel;
 };
@@ -230,6 +231,7 @@ export async function createJob(input: CreateJobInput) {
     emailThreadId: input.emailThreadId?.trim() || null,
     emailFrom: input.emailFrom?.trim() || null,
     emailSubject: input.emailSubject?.trim() || null,
+    emailReplyDraft: input.emailReplyDraft?.trim() || null,
     emailReplySent: Boolean(input.emailReplySent),
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
@@ -252,6 +254,7 @@ export type UpdateJobInput = {
   emailThreadId?: string | null;
   emailFrom?: string | null;
   emailSubject?: string | null;
+  emailReplyDraft?: string | null;
   emailReplySent?: boolean;
   interruptLevel?: InterruptLevel;
 };
@@ -296,6 +299,10 @@ export async function updateJob(id: string, input: UpdateJobInput) {
       input.emailSubject !== undefined
         ? input.emailSubject?.trim() || null
         : existing.emailSubject,
+    emailReplyDraft:
+      input.emailReplyDraft !== undefined
+        ? input.emailReplyDraft?.trim() || null
+        : existing.emailReplyDraft,
     emailReplySent:
       input.emailReplySent !== undefined
         ? Boolean(input.emailReplySent)
