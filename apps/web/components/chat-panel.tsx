@@ -295,6 +295,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
         const type = String(part.type);
         return (
           type.includes("start_job") ||
+          type.includes("draft_daily_post") ||
           type.includes("write_vault_note") ||
           type.includes("resolve_job") ||
           type.includes("clear_needs_you") ||
@@ -310,14 +311,23 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     if (status !== "ready") return;
     for (const message of [...messages].reverse()) {
       for (const part of message.parts) {
-        if (!String(part.type).includes("start_job")) continue;
+        if (
+          !String(part.type).includes("start_job") &&
+          !String(part.type).includes("draft_daily_post")
+        ) {
+          continue;
+        }
         const output =
           part && typeof part === "object" && "output" in part
             ? (part as { output?: unknown }).output
             : null;
         if (!output || typeof output !== "object") continue;
-        const job = (output as { job?: { projectId?: string } }).job;
-        const nextId = job?.projectId?.trim();
+        const fromJob = (output as { job?: { projectId?: string } }).job;
+        const fromQueue = (
+          output as { queued?: Array<{ projectId?: string }> }
+        ).queued?.[0];
+        const nextId =
+          fromJob?.projectId?.trim() || fromQueue?.projectId?.trim();
         if (nextId && nextId !== projectIdRef.current) {
           // Keep the conversation — only sync the soft-default dropdown.
           setProjectId(nextId);

@@ -28,6 +28,12 @@ export const projects = sqliteTable("projects", {
   notes: text("notes").notNull().default(""),
   vaultPath: text("vault_path"),
   needsYou: text("needs_you"),
+  gaPropertyId: text("ga_property_id"),
+  contentChannel: text("content_channel"),
+  contentBrief: text("content_brief").notNull().default(""),
+  dailyContent: integer("daily_content", { mode: "boolean" })
+    .notNull()
+    .default(false),
   interruptLevel: text("interrupt_level")
     .$type<InterruptLevel>()
     .notNull()

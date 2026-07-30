@@ -240,7 +240,8 @@ Connect in this order:
 4. **Calendar** — “what am I supposed to be doing”
 5. **Notes** (Notion/Obsidian/Drive) — memory corpus
 6. **Chat** (Slack/Telegram) — ambient channel
-7. **Billing / analytics** — only if projects are products in production
+7. **Billing / analytics** — GA4 (and later product metrics) written into the Project Hub per lane
+8. **Comms / community** — draft→approve for Skool/etc.; auto-publish only when a trusted channel exists
 
 Each integration should write into the Project Hub, not only into chat context.
 
@@ -294,12 +295,21 @@ Write answers to:
 - Watchdogs for CI / deploys (next)
 - Multi-project parallel lanes with interrupt budgets (partial — parallel code jobs supported)
 
-### Phase 6 — Personality & polish
+### Phase 6 — Content + analytics ✅ (draft + GA4 reads)
+
+- Daily Skool/channel drafts per lane (`dailyContent`, `contentChannel`, `contentBrief`)
+- Approve-before-post via **Needs you** (no Skool auto-publish yet)
+- GA4 read adapter (`gaPropertyId` + service account) for “what’s working” per lane
+- Cron endpoint `/api/cron/daily-content`
+
+### Phase 7 — Personality & polish
 
 - Named voice, concise style pack
 - Proactive digests (“morning briefing”)
 - Memory compaction / weekly project reviews
 - Mobile-first PWA
+- Skool/community auto-publish if/when a safe API exists
+- Watchdogs for CI / deploys
 
 Ship each phase usable alone. Do not wait for wake-word Jarvis before the hub is real.
 

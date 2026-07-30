@@ -7,7 +7,7 @@ An AI command center for everything you’re working on — with a conversationa
 - [Architecture & build guide](docs/ARCHITECTURE.md)
 - [Product contract](docs/PRODUCT.md)
 
-## Phase 1–5 (implemented)
+## Phase 1–5 + content/analytics (implemented)
 
 Project Hub + dashboard shell in `apps/web`:
 
@@ -20,26 +20,48 @@ Project Hub + dashboard shell in `apps/web`:
 - **GitHub read adapters** — repo summary + open PRs (`GITHUB_TOKEN` optional)
 - **Phase 3 async jobs** from chat → In flight → Needs you / Recent + in-app notifications
 - **Phase 5 coding workers** — `kind: code` jobs launch Cursor Cloud Agents (`CURSOR_API_KEY`)
+- **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; approve-before-post
+- **GA4 lane analytics** — `get_lane_analytics` + `GET /api/projects/:id/analytics`
 
 ### Chat + async jobs (Phase 2–3 + 5)
 
 1. Copy `apps/web/.env.example` → `apps/web/.env.local`
 2. Set `OPENAI_API_KEY`
 3. For coding missions, also set `CURSOR_API_KEY` and put a GitHub repo URL on the lane
-4. `npm run dev` and click **Open uplink** on the command center
-5. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
-6. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
+4. For analytics, set GA4 service-account credentials and a property id per lane
+5. `npm run dev` and click **Open uplink** on the command center
+6. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
+7. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
 
 Operator tools:
 - dashboard / project / job status
-- `start_job` / `get_job` / `resolve_job` (async workforce)
+- `start_job` / `get_job` / `resolve_job` / `draft_daily_post` (async workforce)
 - Obsidian list, search, read, write for the active lane
 - GitHub `get_repo_summary` / `list_open_prs` for lanes with a repo URL
+- GA4 `get_lane_analytics` for lanes with a property id
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
-- `research` / `ops` / `message` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
+- `research` / `ops` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
+- `message` → draft channel/Skool copy under `Content/<channel>/`, then **Needs you** (approve-before-post)
 - `code` → launch a Cursor Cloud Agent against the lane’s GitHub repo (`CURSOR_API_KEY` required; repo must be connected in Cursor Integrations). Job stays **In flight** while the agent runs, then **done** (with PR link when available) or **needs_you** / **failed**
 - Missing vault path (non-code) or missing API key / repo URL (code) → **Needs you** with a configure message
+
+### Daily Skool / content drafts
+
+On a lane (e.g. **Carline Dad Codes**):
+
+1. Set **Content channel** (`skool`), turn **Daily content drafts** on, set a **Content brief**, and point at a vault
+2. Ask the uplink to draft today’s post, or hit `GET/POST /api/cron/daily-content` (set `CRON_SECRET` in production; send `Authorization: Bearer …`)
+3. Draft appears under **In flight** → **Needs you** with a vault note under `Content/skool/`
+4. Copy into Skool manually, then **Approve/Resolve**
+
+### Google Analytics (per lane)
+
+1. Create a GCP service account, enable **Google Analytics Data API**, download the JSON key
+2. Add the service account email as **Viewer** on each GA4 property
+3. Set `GA4_SERVICE_ACCOUNT_JSON` (or `GOOGLE_APPLICATION_CREDENTIALS` / `GA4_SERVICE_ACCOUNT_PATH`) in `.env.local`
+4. Put the numeric **GA4 property ID** on the lane
+5. Ask “what’s working on Carline Dad Codes?” or call `GET /api/projects/:id/analytics?days=7`
 
 Chat can also call `write_vault_note` for short immediate writes (`POST /api/projects/:id/notes/write`).
 
@@ -78,4 +100,5 @@ npm run db:seed  # seed if empty
 3. ~~Async jobs + notifications~~
 4. ~~Voice push-to-talk / ambient wake word~~
 5. ~~Dispatch coding agents as workers~~
-6. Watchdogs / digests / PWA polish
+6. ~~Daily content drafts + GA4 lane analytics~~
+7. Watchdogs / digests / PWA polish / Skool auto-publish (if/when a safe channel exists)

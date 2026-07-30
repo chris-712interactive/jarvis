@@ -38,6 +38,10 @@ export async function PATCH(request: Request, { params }: Params) {
     repoUrl: parsed.data.repoUrl,
     vaultPath: parsed.data.vaultPath,
     needsYou: parsed.data.needsYou,
+    gaPropertyId: parsed.data.gaPropertyId,
+    contentChannel: parsed.data.contentChannel,
+    contentBrief: parsed.data.contentBrief,
+    dailyContent: parsed.data.dailyContent,
   });
   if (!project) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

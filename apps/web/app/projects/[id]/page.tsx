@@ -66,6 +66,17 @@ export default async function ProjectDetailPage({ params }: Params) {
                   vault // {project.vaultPath}
                 </p>
               ) : null}
+              {project.gaPropertyId ? (
+                <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
+                  ga4 // {project.gaPropertyId}
+                </p>
+              ) : null}
+              {project.contentChannel || project.dailyContent ? (
+                <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
+                  content // {project.contentChannel || "channel"}
+                  {project.dailyContent ? " · daily on" : " · daily off"}
+                </p>
+              ) : null}
               {project.notes ? (
                 <p className="mt-6 whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">
                   {project.notes}
@@ -132,6 +143,10 @@ export default async function ProjectDetailPage({ params }: Params) {
                   notes: project.notes,
                   vaultPath: project.vaultPath ?? "",
                   needsYou: project.needsYou ?? "",
+                  gaPropertyId: project.gaPropertyId ?? "",
+                  contentChannel: project.contentChannel ?? "",
+                  contentBrief: project.contentBrief ?? "",
+                  dailyContent: Boolean(project.dailyContent),
                   interruptLevel: project.interruptLevel,
                 }}
               />

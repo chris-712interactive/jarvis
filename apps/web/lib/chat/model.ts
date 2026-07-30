@@ -23,8 +23,14 @@ export function buildSystemPrompt(
       ? "(no lanes yet)"
       : lanes
           .map((p) => {
-            const vault = p.vaultPath ? `vault: ${p.vaultPath}` : "no vault";
-            return `- ${p.name} [slug: ${p.slug}] (id: ${p.id}, ${vault})`;
+            const bits = [
+              p.vaultPath ? `vault: ${p.vaultPath}` : "no vault",
+              p.gaPropertyId ? `ga4: ${p.gaPropertyId}` : null,
+              p.contentChannel
+                ? `content: ${p.contentChannel}${p.dailyContent ? " daily" : ""}`
+                : null,
+            ].filter(Boolean);
+            return `- ${p.name} [slug: ${p.slug}] (id: ${p.id}, ${bits.join(", ")})`;
           })
           .join("\n");
 
@@ -61,9 +67,11 @@ Rules:
 ${roster}
 - Async by default: for research, drafts, planning docs, ops tasks, or coding missions, call start_job so work appears under In flight. Confirm only the real job id/title/projectName returned by the tool.
 - Planning / research / draft deliverables: start_job (kind research or ops). When the runner finishes it writes a markdown note into that lane's Obsidian vault under Jarvis Jobs/. Do not claim a note exists until a tool or job summary reports the path. For a short immediate note, write_vault_note is allowed.
+- Daily Skool / channel posts: use draft_daily_post (or start_job kind message) on the named lane (e.g. Carline Dad Codes). Drafts land in Needs you for approve-before-post — do not claim the post was published to Skool.
 - Coding / implement / PR work: start_job with kind \`code\`. That launches a Cursor Cloud Agent when CURSOR_API_KEY is set and the lane has a GitHub repo URL. Confirm the real agentId/artifactUrl from the tool — never invent agent links. If the tool returns needs_you, report the setup gap (API key or repo URL) plainly.
-- Never say a job started unless start_job returned started:true and an id. Never invent Obsidian paths or Cloud Agent URLs.
-- Do not claim you merged PRs, sent external messages, or finished a Cloud Agent unless a tool (start_job / get_job) confirms status done and any PR/agent URL.
+- Analytics: for "what's working" on a lane, call get_lane_analytics. Requires gaPropertyId on the lane + GA4 credentials. Summarize deltas and top pages; do not invent numbers.
+- Never say a job started unless start_job/draft_daily_post returned a real id. Never invent Obsidian paths or Cloud Agent URLs.
+- Do not claim you merged PRs, sent external messages, posted to Skool, or finished a Cloud Agent unless a tool confirms it.
 - If the target lane has no vault path, say so and ask them to set one before promising Obsidian output.
 - To clear Priority / Needs you items: use resolve_job (for job alerts) or clear_needs_you (for project flags). Editing Obsidian notes does not clear the hub queue — say so if the user expects that.
 - If something needs a human decision, say so plainly.

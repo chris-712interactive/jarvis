@@ -24,6 +24,12 @@ import {
   listOpenPullRequests,
   GitHubError,
 } from "@/lib/github/repo";
+import {
+  Ga4Error,
+  getPropertySummary,
+  isGa4Configured,
+} from "@/lib/analytics/ga4";
+import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
 import { jobKinds, interruptLevels } from "@/lib/db/schema";
 
 function vaultErrorMessage(error: unknown) {
@@ -36,6 +42,12 @@ function githubErrorMessage(error: unknown) {
   if (error instanceof GitHubError) return error.message;
   if (error instanceof Error) return error.message;
   return "GitHub request failed";
+}
+
+function ga4ErrorMessage(error: unknown) {
+  if (error instanceof Ga4Error) return error.message;
+  if (error instanceof Error) return error.message;
+  return "GA4 request failed";
 }
 
 const laneFields = {
@@ -113,6 +125,9 @@ export function createOperatorTools(activeProjectId?: string | null) {
             goal: p.goal,
             repoUrl: p.repoUrl,
             vaultPath: p.vaultPath,
+            gaPropertyId: p.gaPropertyId,
+            contentChannel: p.contentChannel,
+            dailyContent: p.dailyContent,
             needsYou: p.needsYou,
             interruptLevel: p.interruptLevel,
             notes: p.notes,
@@ -175,6 +190,10 @@ export function createOperatorTools(activeProjectId?: string | null) {
             goal: project.goal,
             repoUrl: project.repoUrl,
             vaultPath: project.vaultPath,
+            gaPropertyId: project.gaPropertyId,
+            contentChannel: project.contentChannel,
+            contentBrief: project.contentBrief,
+            dailyContent: project.dailyContent,
             needsYou: project.needsYou,
             interruptLevel: project.interruptLevel,
             notes: project.notes,
@@ -455,9 +474,11 @@ export function createOperatorTools(activeProjectId?: string | null) {
           },
           note:
             codeNote ??
-            (project.vaultPath
-              ? `Job is in flight on lane "${project.name}". When finished, a markdown note is written under Jarvis Jobs/ in that lane's vault.`
-              : `Job is in flight on lane "${project.name}", but that lane has no vault path — set one or the job will need you when it tries to write the note.`),
+            (active.kind === "message"
+              ? `Message draft is in flight on lane "${project.name}". It will land in Needs you with a Content/ note to copy into ${project.contentChannel || "the channel"}.`
+              : project.vaultPath
+                ? `Job is in flight on lane "${project.name}". When finished, a markdown note is written under Jarvis Jobs/ in that lane's vault.`
+                : `Job is in flight on lane "${project.name}", but that lane has no vault path — set one or the job will need you when it tries to write the note.`),
         };
       },
     }),
@@ -712,6 +733,100 @@ export function createOperatorTools(activeProjectId?: string | null) {
         } catch (error) {
           return { error: githubErrorMessage(error) };
         }
+      },
+    }),
+
+    get_lane_analytics: tool({
+      description:
+        "Summarize Google Analytics (GA4) for a lane: users, sessions, views, period deltas, and top pages. Requires gaPropertyId on the lane plus GA4 service-account credentials.",
+      inputSchema: z.object({
+        ...laneFields,
+        days: z
+          .number()
+          .int()
+          .min(1)
+          .max(90)
+          .optional()
+          .describe("Lookback days. Defaults to 7."),
+      }),
+      execute: async ({ projectId, lane, days }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
+        if (!project.gaPropertyId) {
+          return {
+            error: `Lane "${project.name}" has no GA4 property id. Set it on the project edit form.`,
+          };
+        }
+        if (!isGa4Configured()) {
+          return {
+            error:
+              "GA4 credentials missing. Set GA4_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS in apps/web/.env.local.",
+          };
+        }
+        try {
+          const summary = await getPropertySummary(
+            project.gaPropertyId,
+            days ?? 7,
+          );
+          return {
+            matchedBy: resolved.matchedBy,
+            projectId: project.id,
+            projectName: project.name,
+            gaPropertyId: project.gaPropertyId,
+            summary,
+          };
+        } catch (error) {
+          return { error: ga4ErrorMessage(error) };
+        }
+      },
+    }),
+
+    draft_daily_post: tool({
+      description:
+        "Queue a daily content draft (kind message) for a lane — used for Skool / channel posts. Draft lands in Needs you for approve-before-post. Prefer lane=Carline Dad Codes when named.",
+      inputSchema: z.object({
+        ...laneFields,
+        force: z
+          .boolean()
+          .optional()
+          .describe("Queue even if a daily draft already exists today."),
+      }),
+      execute: async ({ projectId, lane, force }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const result = await queueDailyContentDrafts({
+          projectId: resolved.project.id,
+          force: Boolean(force),
+        });
+        return {
+          matchedBy: resolved.matchedBy,
+          projectName: resolved.project.name,
+          contentChannel: resolved.project.contentChannel,
+          ...result,
+          note:
+            result.queued.length > 0
+              ? `Draft job queued on "${resolved.project.name}". Watch In flight, then Needs you — copy into ${resolved.project.contentChannel || "the channel"} and Approve/Resolve.`
+              : result.skipped[0]?.reason || "Nothing queued.",
+        };
       },
     }),
   };

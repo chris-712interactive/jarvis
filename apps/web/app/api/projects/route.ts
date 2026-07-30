@@ -30,6 +30,10 @@ export async function POST(request: Request) {
     repoUrl: parsed.data.repoUrl ?? null,
     vaultPath: parsed.data.vaultPath ?? null,
     needsYou: parsed.data.needsYou ?? null,
+    gaPropertyId: parsed.data.gaPropertyId ?? null,
+    contentChannel: parsed.data.contentChannel ?? null,
+    contentBrief: parsed.data.contentBrief ?? "",
+    dailyContent: parsed.data.dailyContent ?? false,
   });
 
   return NextResponse.json({ project }, { status: 201 });

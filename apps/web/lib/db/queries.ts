@@ -56,6 +56,10 @@ export type CreateProjectInput = {
   notes?: string;
   vaultPath?: string | null;
   needsYou?: string | null;
+  gaPropertyId?: string | null;
+  contentChannel?: string | null;
+  contentBrief?: string;
+  dailyContent?: boolean;
   interruptLevel?: InterruptLevel;
 };
 
@@ -78,6 +82,10 @@ export async function createProject(input: CreateProjectInput) {
     notes: input.notes?.trim() ?? "",
     vaultPath: input.vaultPath?.trim() || null,
     needsYou: input.needsYou?.trim() || null,
+    gaPropertyId: input.gaPropertyId?.trim() || null,
+    contentChannel: input.contentChannel?.trim() || null,
+    contentBrief: input.contentBrief?.trim() ?? "",
+    dailyContent: Boolean(input.dailyContent),
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
     updatedAt: now,
@@ -111,6 +119,22 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
       input.needsYou !== undefined
         ? input.needsYou?.trim() || null
         : existing.needsYou,
+    gaPropertyId:
+      input.gaPropertyId !== undefined
+        ? input.gaPropertyId?.trim() || null
+        : existing.gaPropertyId,
+    contentChannel:
+      input.contentChannel !== undefined
+        ? input.contentChannel?.trim() || null
+        : existing.contentChannel,
+    contentBrief:
+      input.contentBrief !== undefined
+        ? input.contentBrief.trim()
+        : existing.contentBrief,
+    dailyContent:
+      input.dailyContent !== undefined
+        ? Boolean(input.dailyContent)
+        : existing.dailyContent,
     interruptLevel: input.interruptLevel ?? existing.interruptLevel,
     updatedAt: new Date(),
   };
@@ -299,9 +323,15 @@ export async function seedIfEmpty() {
   });
 
   const carline = await createProject({
-    name: "The Carline Dad",
-    goal: "Grow the brand systems and keep content + product lanes moving.",
-    notes: "Example project — replace with your real sources.",
+    name: "Carline Dad Codes",
+    goal: "Grow the Carline Dad Codes community with consistent daily Skool posts and clear content loops.",
+    notes: "Content lane — drafts land in Needs you for approve-before-post.",
+    vaultPath: "fixtures/sample-vault",
+    contentChannel: "skool",
+    contentBrief:
+      "Write a short Skool community post for Carline Dad Codes parents/builders. Warm, practical, dad-energy. One hook, 2–4 short paragraphs, one CTA (comment, share a win, or try a tip). Avoid hype and hashtag spam.",
+    dailyContent: true,
+    interruptLevel: "nudge",
     needsYou: null,
   });
 
@@ -339,7 +369,7 @@ export async function seedIfEmpty() {
     kind: "research",
     status: "queued",
     summary: "Queued for local job runner.",
-    brief: "Outline next week's Carline Dad content themes and hooks.",
+    brief: "Outline next week's Carline Dad Codes themes and hooks for Skool.",
   });
 
   await createJob({

@@ -24,6 +24,24 @@ const optionalText = z
     return value.trim();
   });
 
+const optionalBool = z
+  .union([
+    z.boolean(),
+    z.literal("true"),
+    z.literal("false"),
+    z.literal("1"),
+    z.literal("0"),
+    z.literal(""),
+    z.null(),
+  ])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    if (value === "" || value === null) return false;
+    if (value === true || value === "true" || value === "1") return true;
+    return false;
+  });
+
 export const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(120),
   goal: z.string().trim().max(2000).optional().default(""),
@@ -32,6 +50,10 @@ export const createProjectSchema = z.object({
   notes: z.string().trim().max(8000).optional().default(""),
   vaultPath: optionalText,
   needsYou: optionalText,
+  gaPropertyId: optionalText,
+  contentChannel: optionalText,
+  contentBrief: z.string().trim().max(4000).optional().default(""),
+  dailyContent: optionalBool,
   interruptLevel: z.enum(interruptLevels).optional().default("digest"),
 });
 

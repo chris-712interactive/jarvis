@@ -358,3 +358,24 @@ export function jobNotePath(title: string, at = new Date()) {
     .slice(0, 48) || "job";
   return `Jarvis Jobs/${stamp}-${slug}.md`;
 }
+
+/** Daily / channel content drafts under Content/<channel>/. */
+export function contentNotePath(
+  channel: string | null | undefined,
+  title: string,
+  at = new Date(),
+) {
+  const stamp = at.toISOString().slice(0, 10);
+  const channelSlug =
+    (channel ?? "general")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 32) || "general";
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || "post";
+  return `Content/${channelSlug}/${stamp}-${slug}.md`;
+}

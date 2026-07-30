@@ -23,6 +23,10 @@ export function ProjectForm({
     notes: string;
     vaultPath: string;
     needsYou: string;
+    gaPropertyId: string;
+    contentChannel: string;
+    contentBrief: string;
+    dailyContent: boolean;
     interruptLevel: (typeof interrupts)[number];
   };
 }) {
@@ -44,6 +48,10 @@ export function ProjectForm({
       notes: String(form.get("notes") ?? ""),
       vaultPath: String(form.get("vaultPath") ?? "") || null,
       needsYou: String(form.get("needsYou") ?? "") || null,
+      gaPropertyId: String(form.get("gaPropertyId") ?? "") || null,
+      contentChannel: String(form.get("contentChannel") ?? "") || null,
+      contentBrief: String(form.get("contentBrief") ?? ""),
+      dailyContent: String(form.get("dailyContent") ?? "false") === "true",
       interruptLevel: String(form.get("interruptLevel") ?? "digest"),
     };
 
@@ -144,6 +152,50 @@ export function ProjectForm({
           defaultValue={initial?.vaultPath}
           className={fieldClass}
           placeholder="~/Documents/Obsidian/Work or fixtures/sample-vault"
+        />
+      </Field>
+
+      <Field label="GA4 property ID" htmlFor="gaPropertyId">
+        <input
+          id="gaPropertyId"
+          name="gaPropertyId"
+          defaultValue={initial?.gaPropertyId}
+          className={fieldClass}
+          placeholder="123456789"
+        />
+      </Field>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Content channel" htmlFor="contentChannel">
+          <input
+            id="contentChannel"
+            name="contentChannel"
+            defaultValue={initial?.contentChannel}
+            className={fieldClass}
+            placeholder="skool"
+          />
+        </Field>
+        <Field label="Daily content drafts" htmlFor="dailyContent">
+          <select
+            id="dailyContent"
+            name="dailyContent"
+            defaultValue={initial?.dailyContent ? "true" : "false"}
+            className={fieldClass}
+          >
+            <option value="false">off</option>
+            <option value="true">on</option>
+          </select>
+        </Field>
+      </div>
+
+      <Field label="Content brief (daily posts)" htmlFor="contentBrief">
+        <textarea
+          id="contentBrief"
+          name="contentBrief"
+          rows={4}
+          defaultValue={initial?.contentBrief}
+          className={fieldClass}
+          placeholder="Voice, audience, CTA rules for daily Skool / channel drafts."
         />
       </Field>
 

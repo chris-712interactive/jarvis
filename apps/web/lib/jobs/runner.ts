@@ -3,7 +3,7 @@ import { getJob, getProject, listJobs, updateJob } from "@/lib/db/queries";
 import { createNotification } from "@/lib/db/notifications";
 import { getChatModel, isChatConfigured } from "@/lib/chat/model";
 import type { Job, JobKind, Project } from "@/lib/db/schema";
-import { jobNotePath, writeVaultNote, VaultError } from "@/lib/vault/notes";
+import { jobNotePath, contentNotePath, writeVaultNote, VaultError } from "@/lib/vault/notes";
 import {
   createCloudAgent,
   CursorAgentError,
@@ -20,6 +20,29 @@ import { getRepoSummary, parseGithubRepoUrl } from "@/lib/github/repo";
 const MIN_RUNNING_MS = 8000;
 
 function stubMarkdown(job: Job, project: Project) {
+  const channel = project.contentChannel?.trim();
+  if ((job.kind as JobKind) === "message") {
+    return [
+      `# ${job.title}`,
+      "",
+      `> Lane: **${project.name}** · Channel: **${channel || "content"}** · Job \`${job.id}\``,
+      "",
+      "## Ready to post",
+      "",
+      job.brief.trim() || "(no brief — set OPENAI_API_KEY for a drafted post)",
+      "",
+      "## Checklist",
+      "",
+      "- [ ] Copy into Skool / channel",
+      "- [ ] Post",
+      "- [ ] Approve/Resolve this job in Jarvis",
+      "",
+      "---",
+      `_Drafted by Jarvis · ${new Date().toISOString()}_`,
+      "",
+    ].join("\n");
+  }
+
   return [
     `# ${job.title}`,
     "",
@@ -40,6 +63,47 @@ function stubMarkdown(job: Job, project: Project) {
   ].join("\n");
 }
 
+function buildDraftPrompt(job: Job, project: Project) {
+  if ((job.kind as JobKind) === "message") {
+    const channel = project.contentChannel?.trim() || "community";
+    return [
+      `You are drafting a ready-to-publish ${channel} post for lane "${project.name}".`,
+      project.goal?.trim() ? `Lane goal: ${project.goal.trim()}` : null,
+      project.contentBrief?.trim()
+        ? `Standing content brief:\n${project.contentBrief.trim()}`
+        : null,
+      `Job title: ${job.title}`,
+      `Operator brief:`,
+      job.brief.trim() || job.title,
+      "",
+      "Requirements:",
+      "- Start with a single # heading (post title)",
+      "- Then a ## Ready to post section containing the exact copy to paste into the channel",
+      "- Keep the post concise and on-brand; no hashtag spam",
+      "- Do not invent metrics, quotes, or external facts",
+      "- End with a short ## Checklist (copy, post, approve in Jarvis)",
+      "- Output markdown only",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return [
+    `Write an Obsidian markdown note for project lane "${project.name}".`,
+    `Job title: ${job.title}`,
+    `Job kind: ${job.kind}`,
+    `Brief from the operator:`,
+    job.brief.trim() || job.title,
+    "",
+    "Requirements:",
+    "- Start with a single # heading matching the title",
+    "- Be concrete and useful (plans, bullets, next actions)",
+    "- Do not invent external facts you were not given",
+    "- Keep it under ~800 words",
+    "- Output markdown only, no surrounding commentary",
+  ].join("\n");
+}
+
 async function draftNoteMarkdown(job: Job, project: Project) {
   if (!isChatConfigured()) {
     return stubMarkdown(job, project);
@@ -48,21 +112,8 @@ async function draftNoteMarkdown(job: Job, project: Project) {
   try {
     const { text } = await generateText({
       model: getChatModel(),
-      temperature: 0.4,
-      prompt: [
-        `Write an Obsidian markdown note for project lane "${project.name}".`,
-        `Job title: ${job.title}`,
-        `Job kind: ${job.kind}`,
-        `Brief from the operator:`,
-        job.brief.trim() || job.title,
-        "",
-        "Requirements:",
-        "- Start with a single # heading matching the title",
-        "- Be concrete and useful (plans, bullets, next actions)",
-        "- Do not invent external facts you were not given",
-        "- Keep it under ~800 words",
-        "- Output markdown only, no surrounding commentary",
-      ].join("\n"),
+      temperature: (job.kind as JobKind) === "message" ? 0.7 : 0.4,
+      prompt: buildDraftPrompt(job, project),
     });
     const body = text.trim();
     if (!body) return stubMarkdown(job, project);
@@ -83,7 +134,10 @@ async function writeJobArtifact(job: Job, project: Project) {
 
   try {
     const content = await draftNoteMarkdown(job, project);
-    const notePath = jobNotePath(job.title);
+    const notePath =
+      (job.kind as JobKind) === "message"
+        ? contentNotePath(project.contentChannel, job.title)
+        : jobNotePath(job.title);
     const note = writeVaultNote(project.vaultPath, notePath, content, {
       overwrite: true,
     });
@@ -370,6 +424,12 @@ async function finishVaultJob(job: Job) {
       job,
       `Could not write Obsidian note: ${artifact.reason}. Brief was: ${brief}`,
     );
+  }
+
+  if ((job.kind as JobKind) === "message") {
+    const channel = project.contentChannel?.trim() || "channel";
+    const summary = `Draft ready for ${channel}. Note \`${artifact.path}\`. Copy/post manually, then Approve/Resolve.`;
+    return needsYouJob(job, summary, { artifactUrl: artifact.path });
   }
 
   const summary = `Wrote Obsidian note \`${artifact.path}\`. Brief: ${brief}`;

@@ -27,6 +27,22 @@ function migrateSchema(sqlite: Database.Database) {
   if (!projectCols.some((column) => column.name === "vault_path")) {
     sqlite.exec(`ALTER TABLE projects ADD COLUMN vault_path TEXT`);
   }
+  if (!projectCols.some((column) => column.name === "ga_property_id")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN ga_property_id TEXT`);
+  }
+  if (!projectCols.some((column) => column.name === "content_channel")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN content_channel TEXT`);
+  }
+  if (!projectCols.some((column) => column.name === "content_brief")) {
+    sqlite.exec(
+      `ALTER TABLE projects ADD COLUMN content_brief TEXT NOT NULL DEFAULT ''`,
+    );
+  }
+  if (!projectCols.some((column) => column.name === "daily_content")) {
+    sqlite.exec(
+      `ALTER TABLE projects ADD COLUMN daily_content INTEGER NOT NULL DEFAULT 0`,
+    );
+  }
 
   const jobCols = tableColumns(sqlite, "jobs");
   if (!jobCols.some((column) => column.name === "brief")) {
@@ -71,6 +87,10 @@ function createSqlite() {
       notes TEXT NOT NULL DEFAULT '',
       vault_path TEXT,
       needs_you TEXT,
+      ga_property_id TEXT,
+      content_channel TEXT,
+      content_brief TEXT NOT NULL DEFAULT '',
+      daily_content INTEGER NOT NULL DEFAULT 0,
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
