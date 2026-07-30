@@ -6,6 +6,7 @@ An AI command center for everything you’re working on — with a conversationa
 
 - [Architecture & build guide](docs/ARCHITECTURE.md)
 - [Product contract](docs/PRODUCT.md)
+- [Deploy + cron](docs/DEPLOY.md)
 
 ## Phase 1–5 + content/analytics (implemented)
 
@@ -23,6 +24,7 @@ Project Hub + dashboard shell in `apps/web`:
 - **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; approve-before-post
 - **GA4 lane analytics** — `get_lane_analytics` + `GET /api/projects/:id/analytics`
 - **Gmail → code agents** — allowlisted senders → Cloud Agent PR → Approve & reply
+- **Scheduled tick + briefings** — `/api/cron/tick` advances jobs, email, daily content, morning/evening briefings, and PR CI watchdog
 
 ### Chat + async jobs (Phase 2–3 + 5)
 
@@ -38,6 +40,7 @@ Project Hub + dashboard shell in `apps/web`:
 Operator tools:
 - dashboard / project / job status
 - `start_job` / `get_job` / `resolve_job` / `draft_daily_post` / `ingest_emails`
+- `get_briefing` / `run_briefing` / `check_pr_ci`
 - Obsidian list, search, read, write for the active lane
 - GitHub `get_repo_summary` / `list_open_prs` for lanes with a repo URL
 - GA4 `get_lane_analytics` for lanes with a property id
@@ -54,7 +57,7 @@ Local job runner (`POST /api/jobs/process`, also kicked on create and by the das
 2. Set `GMAIL_CLIENT_ID` + `GMAIL_CLIENT_SECRET` in `.env.local`
 3. Visit `http://localhost:3000/api/gmail/oauth/start`, finish consent, copy `GMAIL_REFRESH_TOKEN` into `.env.local`
 4. On each lane: set **Email senders** (allowlist) + GitHub **Repo URL**
-5. Poll with `GET/POST /api/cron/email-ingest` (Bearer `CRON_SECRET` in production) or ask the uplink to `ingest_emails`
+5. Poll with `GET/POST /api/cron/tick` or `/api/cron/email-ingest` (Bearer `CRON_SECRET` in production) or ask the uplink to `ingest_emails`
 6. Flow:
    - **code** intent → Cloud Agent / PR → **Needs you** → **Approve & reply**
    - **question** intent → draft reply in **Needs you** → **Approve & reply**
@@ -65,9 +68,19 @@ Local job runner (`POST /api/jobs/process`, also kicked on create and by the das
 On a lane (e.g. **Carline Dad Codes**):
 
 1. Set **Content channel** (`skool`), turn **Daily content drafts** on, set a **Content brief**, and point at a vault
-2. Ask the uplink to draft today’s post, or hit `GET/POST /api/cron/daily-content` (set `CRON_SECRET` in production; send `Authorization: Bearer …`)
+2. Ask the uplink to draft today’s post, or hit `GET/POST /api/cron/tick` / `daily-content` (set `CRON_SECRET` in production; send `Authorization: Bearer …`)
 3. Draft appears under **In flight** → **Needs you** with a vault note under `Content/skool/`
 4. Copy into Skool manually, then **Approve/Resolve**
+
+### Scheduled tick + briefings
+
+See [docs/DEPLOY.md](docs/DEPLOY.md). Short version:
+
+1. Deploy on a **persistent Node host** (SQLite + `better-sqlite3` — not vanilla Vercel serverless)
+2. Set `CRON_SECRET`, optional `BRIEFING_TZ` / morning+evening hours
+3. Cron every 5–15 minutes: `POST /api/cron/tick` with `Authorization: Bearer …`
+4. Morning/evening briefings land in **Alerts** (+ vault `Jarvis Jobs/briefings/` when the hub has a vault)
+5. Ask the uplink for “morning briefing” (`get_briefing` / `run_briefing`) or “check PR CI” (`check_pr_ci`)
 
 ### Google Analytics (per lane)
 
@@ -117,4 +130,5 @@ npm run db:seed  # seed if empty
 6. ~~Daily content drafts + GA4 lane analytics~~
 7. ~~Daily content drafts + GA4 lane analytics~~
 8. ~~Gmail → code agents → approve → reply~~
-9. Watchdogs / digests / PWA polish / Skool auto-publish (if/when a safe channel exists)
+9. ~~Cron tick + morning/evening briefings + PR CI watchdog~~
+10. PWA polish / Skool auto-publish (if/when a safe channel exists) / trust budgets

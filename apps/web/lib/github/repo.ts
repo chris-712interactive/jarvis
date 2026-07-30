@@ -174,3 +174,92 @@ export async function listOpenPullRequests(
     base: pr.base.ref,
   }));
 }
+
+export type PullRequestCiStatus = {
+  number: number;
+  title: string;
+  htmlUrl: string;
+  headSha: string;
+  headRef: string;
+  draft: boolean;
+  /** Combined commit status: success | pending | failure | error | unknown */
+  state: "success" | "pending" | "failure" | "error" | "unknown";
+  totalCount: number;
+  failing: Array<{ name: string; conclusion: string | null }>;
+};
+
+/** CI / check-run summary for one pull request. */
+export async function getPullRequestCiStatus(
+  repoUrl: string,
+  prNumber: number,
+): Promise<PullRequestCiStatus> {
+  const parsed = parseGithubRepoUrl(repoUrl);
+  if (!parsed) {
+    throw new GitHubError("Not a GitHub repo URL", 400);
+  }
+
+  const pr = await githubFetch<{
+    number: number;
+    title: string;
+    html_url: string;
+    draft: boolean;
+    head: { sha: string; ref: string };
+  }>(`/repos/${parsed.owner}/${parsed.repo}/pulls/${prNumber}`);
+
+  const checks = await githubFetch<{
+    total_count: number;
+    check_runs: Array<{
+      name: string;
+      status: string;
+      conclusion: string | null;
+    }>;
+  }>(
+    `/repos/${parsed.owner}/${parsed.repo}/commits/${pr.head.sha}/check-runs?per_page=50`,
+  );
+
+  const failing = checks.check_runs
+    .filter((run) => {
+      if (run.status !== "completed") return false;
+      const c = (run.conclusion ?? "").toLowerCase();
+      return c === "failure" || c === "timed_out" || c === "cancelled" || c === "action_required";
+    })
+    .map((run) => ({ name: run.name, conclusion: run.conclusion }));
+
+  const pending = checks.check_runs.some(
+    (run) => run.status === "queued" || run.status === "in_progress",
+  );
+
+  let state: PullRequestCiStatus["state"] = "unknown";
+  if (checks.total_count === 0) {
+    // Fall back to legacy combined status when check-runs are empty.
+    try {
+      const legacy = await githubFetch<{
+        state: string;
+      }>(`/repos/${parsed.owner}/${parsed.repo}/commits/${pr.head.sha}/status`);
+      const s = legacy.state?.toLowerCase();
+      if (s === "success" || s === "pending" || s === "failure" || s === "error") {
+        state = s;
+      }
+    } catch {
+      state = "unknown";
+    }
+  } else if (failing.length > 0) {
+    state = "failure";
+  } else if (pending) {
+    state = "pending";
+  } else {
+    state = "success";
+  }
+
+  return {
+    number: pr.number,
+    title: pr.title,
+    htmlUrl: pr.html_url,
+    headSha: pr.head.sha,
+    headRef: pr.head.ref,
+    draft: Boolean(pr.draft),
+    state,
+    totalCount: checks.total_count,
+    failing,
+  };
+}

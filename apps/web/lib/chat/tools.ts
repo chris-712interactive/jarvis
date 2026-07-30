@@ -33,6 +33,11 @@ import {
   isGa4Configured,
 } from "@/lib/analytics/ga4";
 import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
+import {
+  generateBriefing,
+  getLatestBriefing,
+} from "@/lib/briefing/generate";
+import { runPrWatchdog } from "@/lib/jobs/pr-watchdog";
 import { jobKinds, interruptLevels } from "@/lib/db/schema";
 
 function vaultErrorMessage(error: unknown) {
@@ -871,6 +876,72 @@ export function createOperatorTools(activeProjectId?: string | null) {
             result.queued.length > 0
               ? `Queued ${result.queued.length} email job(s). Code runs agents; questions land as draft replies in Needs you; ambiguous needs triage.`
               : "No new allowlisted emails queued.",
+        };
+      },
+    }),
+
+    get_briefing: tool({
+      description:
+        "Fetch the latest morning or evening operator briefing (from Alerts). Use when the user asks for today's briefing or a status digest.",
+      inputSchema: z.object({
+        kind: z
+          .enum(["morning", "evening"])
+          .optional()
+          .describe("Optional filter. Defaults to whichever was generated most recently."),
+      }),
+      execute: async ({ kind }) => {
+        const latest = await getLatestBriefing(kind);
+        if (!latest) {
+          return {
+            found: false,
+            note: "No briefing yet. Call run_briefing to generate one now.",
+          };
+        }
+        return { found: true, ...latest };
+      },
+    }),
+
+    run_briefing: tool({
+      description:
+        "Generate a morning or evening briefing now (notification + optional vault note under Jarvis Jobs/briefings/). Use when the user asks for a briefing or end-of-day wrap.",
+      inputSchema: z.object({
+        kind: z
+          .enum(["morning", "evening"])
+          .optional()
+          .describe("Defaults from local hour (<15 morning, else evening)."),
+        force: z
+          .boolean()
+          .optional()
+          .describe("Regenerate even if one already exists for today."),
+      }),
+      execute: async ({ kind, force }) => {
+        const result = await generateBriefing({
+          kind,
+          force: Boolean(force),
+        });
+        return {
+          ...result,
+          note: result.skipped
+            ? `Already sent ${result.kind} briefing for ${result.dayKey}. Pass force=true to regenerate.`
+            : `${result.kind} briefing ready in Alerts${result.vaultPath ? ` and vault ${result.vaultPath}` : ""}.`,
+        };
+      },
+    }),
+
+    check_pr_ci: tool({
+      description:
+        "Scan open PRs on active lanes for failing CI and create Alerts notifications. Light watchdog — does not merge or comment on GitHub.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const result = await runPrWatchdog();
+        return {
+          ...result,
+          note:
+            result.notified.length > 0
+              ? `Posted ${result.notified.length} CI alert(s).`
+              : result.failing.length > 0
+                ? "Failing PRs found but already notified recently."
+                : "No failing CI on scanned open PRs.",
         };
       },
     }),
