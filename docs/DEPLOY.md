@@ -47,7 +47,7 @@ One replica only — SQLite does not like multiple writers.
 | `OPENAI_API_KEY` | yes (for chat) | Uplink + drafts + briefing polish |
 | `CRON_SECRET` | **yes in production** | `openssl rand -hex 32` |
 | `JARVIS_DB_PATH` | yes with volume | `/data/jarvis.db` |
-| `BRIEFING_TZ` | recommended | e.g. `America/Chicago` |
+| `BRIEFING_TZ` | recommended | IANA timezone, e.g. `America/Chicago` (not `CST`) |
 | `CURSOR_API_KEY` | for code jobs | Cursor Dashboard → API Keys |
 | `GITHUB_TOKEN` | recommended | private repos + PR CI watchdog |
 | Gmail / GA4 | optional | see `apps/web/.env.example` |

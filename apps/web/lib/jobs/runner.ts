@@ -503,45 +503,55 @@ export async function processQueuedJobs(limit = 8): Promise<ProcessJobsResult> {
 
   const queued = await listJobs({ status: "queued" });
   for (const job of queued.slice(0, limit)) {
-    await updateJob(job.id, {
-      status: "running",
-      summary: claimSummary(job),
-    });
-    claimed.push(job.id);
+    try {
+      await updateJob(job.id, {
+        status: "running",
+        summary: claimSummary(job),
+      });
+      claimed.push(job.id);
+    } catch (error) {
+      console.error("[jobs] claim failed", job.id, error);
+      skipped.push(job.id);
+    }
   }
 
   const running = await listJobs({ status: "running" });
   const now = Date.now();
   for (const job of running) {
-    if ((job.kind as JobKind) === "code") {
-      const before = job;
-      const after = await refreshCodeAgent(job);
-      if (!after) continue;
-      if (after.status !== "running") {
-        finished.push(job.id);
-      } else if (
-        after.summary !== before.summary ||
-        after.artifactUrl !== before.artifactUrl ||
-        after.agentId !== before.agentId ||
-        after.agentRunId !== before.agentRunId
-      ) {
-        updated.push(job.id);
-      } else {
-        skipped.push(job.id);
+    try {
+      if ((job.kind as JobKind) === "code") {
+        const before = job;
+        const after = await refreshCodeAgent(job);
+        if (!after) continue;
+        if (after.status !== "running") {
+          finished.push(job.id);
+        } else if (
+          after.summary !== before.summary ||
+          after.artifactUrl !== before.artifactUrl ||
+          after.agentId !== before.agentId ||
+          after.agentRunId !== before.agentRunId
+        ) {
+          updated.push(job.id);
+        } else {
+          skipped.push(job.id);
+        }
+        continue;
       }
-      continue;
-    }
 
-    const updatedAt =
-      job.updatedAt instanceof Date
-        ? job.updatedAt.getTime()
-        : new Date(job.updatedAt).getTime();
-    if (now - updatedAt < MIN_RUNNING_MS) {
+      const updatedAt =
+        job.updatedAt instanceof Date
+          ? job.updatedAt.getTime()
+          : new Date(job.updatedAt).getTime();
+      if (now - updatedAt < MIN_RUNNING_MS) {
+        skipped.push(job.id);
+        continue;
+      }
+      await finishVaultJob(job);
+      finished.push(job.id);
+    } catch (error) {
+      console.error("[jobs] process running failed", job.id, error);
       skipped.push(job.id);
-      continue;
     }
-    await finishVaultJob(job);
-    finished.push(job.id);
   }
 
   return { claimed, finished, skipped, updated };

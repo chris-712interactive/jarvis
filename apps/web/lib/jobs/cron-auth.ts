@@ -20,8 +20,23 @@ export function cronUnauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
+function isValidTimeZone(timeZone: string) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getOperatorTimeZone() {
-  return process.env.BRIEFING_TZ?.trim() || process.env.TZ?.trim() || "UTC";
+  const raw =
+    process.env.BRIEFING_TZ?.trim() || process.env.TZ?.trim() || "UTC";
+  if (isValidTimeZone(raw)) return raw;
+  console.warn(
+    `[cron-auth] Invalid timezone "${raw}" — falling back to UTC. Use an IANA name like America/Chicago.`,
+  );
+  return "UTC";
 }
 
 /** Local calendar parts in the operator timezone. */
@@ -29,8 +44,9 @@ export function getLocalHourParts(
   at: Date = new Date(),
   timeZone: string = getOperatorTimeZone(),
 ) {
+  const safeZone = isValidTimeZone(timeZone) ? timeZone : "UTC";
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+    timeZone: safeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -47,7 +63,7 @@ export function getLocalHourParts(
   const hourRaw = Number(lookup("hour"));
 
   return {
-    timeZone,
+    timeZone: safeZone,
     year: Number.isFinite(year) ? year : at.getUTCFullYear(),
     month: Number.isFinite(month) ? month : at.getUTCMonth() + 1,
     day: Number.isFinite(day) ? day : at.getUTCDate(),

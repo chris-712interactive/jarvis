@@ -16,15 +16,47 @@ import { processQueuedJobs } from "@/lib/jobs/runner";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+async function step<T>(
+  name: string,
+  fn: () => Promise<T>,
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  try {
+    return { ok: true, data: await fn() };
+  } catch (error) {
+    console.error(`[cron/tick] ${name} failed`, error);
+    return { ok: false, error: errorMessage(error) };
+  }
+}
+
 /**
  * Unified scheduler tick — call every 5–15 minutes from host cron.
  * Advances jobs, ingests email, queues daily content, sends briefings in-window,
  * and watches open PR CI.
+ *
+ * Each step is isolated so one failure returns JSON details instead of a bare 500.
  */
 async function run(request: Request) {
   if (!authorizeCron(request)) return cronUnauthorized();
 
-  await seedIfEmpty();
+  try {
+    await seedIfEmpty();
+  } catch (error) {
+    console.error("[cron/tick] seedIfEmpty failed", error);
+    return NextResponse.json(
+      {
+        ok: false,
+        at: new Date().toISOString(),
+        error: `seedIfEmpty: ${errorMessage(error)}`,
+      },
+      { status: 500 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const forceBriefing =
     searchParams.get("forceBriefing") === "1" ||
@@ -36,41 +68,62 @@ async function run(request: Request) {
     searchParams.get("skipWatchdog") === "1" ||
     searchParams.get("skipWatchdog") === "true";
 
-  const jobs = await processQueuedJobs();
-
-  let email: Awaited<ReturnType<typeof ingestInboundEmails>> | { skipped: true; reason: string };
-  if (isGmailConfigured()) {
-    email = await ingestInboundEmails({ maxMessages: 15 });
-  } else {
-    email = { skipped: true, reason: "gmail_not_configured" };
-  }
-
-  const dailyContent = await queueDailyContentDrafts({ force: forceContent });
-
-  const briefings: Array<Awaited<ReturnType<typeof generateBriefing>>> = [];
-  if (forceBriefing) {
-    briefings.push(await generateBriefing({ force: true }));
-  } else {
-    if (shouldRunMorningBriefing()) {
-      briefings.push(await generateBriefing({ kind: "morning" }));
+  const jobsResult = await step("jobs", () => processQueuedJobs());
+  const emailResult = await step("email", async () => {
+    if (!isGmailConfigured()) {
+      return { skipped: true as const, reason: "gmail_not_configured" };
     }
-    if (shouldRunEveningBriefing()) {
-      briefings.push(await generateBriefing({ kind: "evening" }));
-    }
-  }
+    return ingestInboundEmails({ maxMessages: 15 });
+  });
+  const dailyContentResult = await step("dailyContent", () =>
+    queueDailyContentDrafts({ force: forceContent }),
+  );
 
-  const watchdog = skipWatchdog
-    ? { skipped: true as const }
-    : await runPrWatchdog();
+  const briefingsResult = await step("briefings", async () => {
+    const briefings: Array<Awaited<ReturnType<typeof generateBriefing>>> = [];
+    if (forceBriefing) {
+      briefings.push(await generateBriefing({ force: true }));
+    } else {
+      if (shouldRunMorningBriefing()) {
+        briefings.push(await generateBriefing({ kind: "morning" }));
+      }
+      if (shouldRunEveningBriefing()) {
+        briefings.push(await generateBriefing({ kind: "evening" }));
+      }
+    }
+    return briefings;
+  });
+
+  const watchdogResult = skipWatchdog
+    ? {
+        ok: true as const,
+        data: { skipped: true as const },
+      }
+    : await step("watchdog", () => runPrWatchdog());
+
+  const errors = [
+    !jobsResult.ok ? `jobs: ${jobsResult.error}` : null,
+    !emailResult.ok ? `email: ${emailResult.error}` : null,
+    !dailyContentResult.ok ? `dailyContent: ${dailyContentResult.error}` : null,
+    !briefingsResult.ok ? `briefings: ${briefingsResult.error}` : null,
+    !watchdogResult.ok ? `watchdog: ${watchdogResult.error}` : null,
+  ].filter(Boolean) as string[];
 
   return NextResponse.json({
-    ok: true,
+    ok: errors.length === 0,
     at: new Date().toISOString(),
-    jobs,
-    email,
-    dailyContent,
-    briefings,
-    watchdog,
+    jobs: jobsResult.ok ? jobsResult.data : { error: jobsResult.error },
+    email: emailResult.ok ? emailResult.data : { error: emailResult.error },
+    dailyContent: dailyContentResult.ok
+      ? dailyContentResult.data
+      : { error: dailyContentResult.error },
+    briefings: briefingsResult.ok
+      ? briefingsResult.data
+      : { error: briefingsResult.error },
+    watchdog: watchdogResult.ok
+      ? watchdogResult.data
+      : { error: watchdogResult.error },
+    errors,
   });
 }
 

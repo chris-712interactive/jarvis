@@ -52,16 +52,45 @@ jobs:
           fi
 
           echo "POST ${URL}"
-          curl -fsS -X POST \
+          set +e
+          HTTP_CODE=$(curl -sS -o /tmp/jarvis-tick.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Accept: application/json" \
             --max-time 120 \
-            "${URL}" | tee /tmp/jarvis-tick.json
+            "${URL}")
+          CURL_EXIT=$?
+          set -e
+
+          echo "HTTP ${HTTP_CODE} (curl exit ${CURL_EXIT})"
+          echo "Response body:"
+          cat /tmp/jarvis-tick.json || true
+          echo
+
+          if [ "${CURL_EXIT}" -ne 0 ]; then
+            echo "curl failed"
+            exit 1
+          fi
+
+          if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -ge 300 ]; then
+            echo "Tick returned non-2xx"
+            exit 1
+          fi
 
           python3 - <<'PY'
           import json, sys
-          data = json.load(open("/tmp/jarvis-tick.json"))
-          if not data.get("ok", True) and "jobs" not in data:
+          raw = open("/tmp/jarvis-tick.json").read().strip()
+          if not raw:
+              print("Empty response body")
+              sys.exit(1)
+          data = json.loads(raw)
+          errors = data.get("errors") or []
+          if errors:
+              print("Tick completed with step errors:")
+              for err in errors:
+                  print(f" - {err}")
+              # Still succeed HTTP-wise; surface for logs. Fail the job so we notice.
+              sys.exit(1)
+          if data.get("ok") is False and not errors:
               print("Unexpected response:", data)
               sys.exit(1)
           print("tick ok")
