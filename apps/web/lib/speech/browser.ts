@@ -25,6 +25,9 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
 };
 
+let voicesCache: SpeechSynthesisVoice[] | null = null;
+let voicesLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+
 export function getSpeechRecognitionConstructor() {
   if (typeof window === "undefined") return null;
   const speechWindow = window as SpeechWindow;
@@ -40,7 +43,7 @@ export function isSpeechRecognitionSupported() {
 }
 
 export function isSpeechSynthesisSupported() {
-  return typeof window !== "undefined" && Boolean(window.speechSynthesis);
+  return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
 export function normalizeSpeech(text: string) {
@@ -85,7 +88,6 @@ export function collapseSpeechRepeats(text: string) {
   const raw = text.replace(/\s+/g, " ").trim();
   if (!raw) return "";
 
-  // Drop consecutive duplicate words first.
   const words: string[] = [];
   for (const word of raw.split(" ")) {
     if (!word) continue;
@@ -134,7 +136,6 @@ export function collapseSpeechRepeats(text: string) {
     }
   }
 
-  // STT often restarts mid-sentence leaving near-duplicate spans, not only adjacent loops.
   arr = collapseDistantPhraseRepeats(arr);
 
   if (arr.length > 48) {
@@ -147,7 +148,6 @@ export function collapseSpeechRepeats(text: string) {
   return arr.join(" ").trim();
 }
 
-/** Remove a later copy of a long phrase when STT echoed the same request again. */
 function collapseDistantPhraseRepeats(words: string[]) {
   let arr = words;
   let guard = 0;
@@ -172,7 +172,6 @@ function collapseDistantPhraseRepeats(words: string[]) {
   return arr;
 }
 
-/** Final cleanup before a voice command is sent to chat. */
 export function sanitizeVoiceCommand(text: string) {
   return collapseSpeechRepeats(text);
 }
@@ -181,7 +180,6 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Detect a leading wake phrase and any command text after it. */
 export function extractWakeCommand(
   transcript: string,
   wakeWord = "jarvis",
@@ -190,7 +188,6 @@ export function extractWakeCommand(
   if (!normalized) return { heard: false, command: "" };
 
   const word = escapeRegExp(normalizeSpeech(wakeWord) || "jarvis");
-  // Only the leading wake counts — later "Jarvis" in the sentence stays intact.
   const pattern = new RegExp(
     `^(?:(?:hey|ok|okay|hi)\\s+)?${word}\\b`,
     "i",
@@ -208,7 +205,6 @@ export function stopSpeaking() {
   if (!isSpeechSynthesisSupported()) return;
   try {
     window.speechSynthesis.cancel();
-    // Chrome can report speaking:true with no audio after cancel — resume unsticks it.
     window.speechSynthesis.resume();
   } catch {
     // ignore
@@ -224,24 +220,37 @@ function wait(ms: number) {
 /** Chrome loads voices async; first getVoices() is often empty. */
 export function loadSpeechVoices(): Promise<SpeechSynthesisVoice[]> {
   if (!isSpeechSynthesisSupported()) return Promise.resolve([]);
+  if (voicesCache && voicesCache.length > 0) {
+    return Promise.resolve(voicesCache);
+  }
+  if (voicesLoadPromise) return voicesLoadPromise;
 
-  const existing = window.speechSynthesis.getVoices();
-  if (existing.length > 0) return Promise.resolve(existing);
+  voicesLoadPromise = new Promise((resolve) => {
+    const finish = (voices: SpeechSynthesisVoice[]) => {
+      voicesCache = voices;
+      resolve(voices);
+    };
 
-  return new Promise((resolve) => {
+    const existing = window.speechSynthesis.getVoices();
+    if (existing.length > 0) {
+      finish(existing);
+      return;
+    }
+
     let settled = false;
-    const finish = () => {
+    const done = () => {
       if (settled) return;
       settled = true;
       window.speechSynthesis.removeEventListener("voiceschanged", onChange);
-      resolve(window.speechSynthesis.getVoices());
+      finish(window.speechSynthesis.getVoices());
     };
-    const onChange = () => finish();
+    const onChange = () => done();
     window.speechSynthesis.addEventListener("voiceschanged", onChange);
-    // Touch the API again — some Chromium builds only populate after a second call.
     void window.speechSynthesis.getVoices();
-    window.setTimeout(finish, 750);
+    window.setTimeout(done, 1000);
   });
+
+  return voicesLoadPromise;
 }
 
 function pickVoice(voices: SpeechSynthesisVoice[]) {
@@ -250,72 +259,62 @@ function pickVoice(voices: SpeechSynthesisVoice[]) {
     /^en([-_]|$)/i.test(voice.lang || ""),
   );
   const pool = english.length > 0 ? english : voices;
-  // Prefer local/device voices — Chrome "Google" online voices often stay silent.
-  const local = pool.find((voice) => voice.localService);
-  return local ?? pool.find((voice) => /english/i.test(voice.name)) ?? pool[0];
+
+  // Prefer local/device voices. Skip Chrome "Google" online voices — often silent.
+  const local = pool.filter(
+    (voice) =>
+      voice.localService && !/google/i.test(voice.name),
+  );
+  if (local.length > 0) {
+    return (
+      local.find((voice) => /samantha|daniel|karen|moira|reed|aaron|flo/i.test(voice.name)) ??
+      local[0]
+    );
+  }
+
+  const nonGoogle = pool.filter((voice) => !/google/i.test(voice.name));
+  return nonGoogle[0] ?? pool[0];
 }
 
 /**
- * Warm the speech engine on a user gesture so later async replies can speak.
- * Call from Speak toggle / open uplink / send / mic.
+ * Soft unlock on a user gesture: load voices + resume.
+ * Avoids cancel() here — cancel-after-warm leaves Chrome stuck silent.
  */
 export function primeSpeechSynthesis() {
   if (!isSpeechSynthesisSupported()) return;
   try {
     void loadSpeechVoices();
-    // Empty utterance on a gesture unlocks synthesis on some Chrome builds.
-    const warm = new SpeechSynthesisUtterance(" ");
-    warm.volume = 0;
-    warm.rate = 2;
     window.speechSynthesis.resume();
-    window.speechSynthesis.speak(warm);
-    window.setTimeout(() => {
-      try {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
-      } catch {
-        // ignore
-      }
-    }, 40);
   } catch {
     // ignore
   }
 }
 
-/**
- * Speak text via browser TTS.
- * Chrome often stalls speechSynthesis and skips onend — keep a resume tick
- * and a hard timeout so callers never stay locked in a "speaking" state.
- */
-export async function speakText(text: string): Promise<void> {
-  if (!isSpeechSynthesisSupported()) return;
-
-  const clean = text.replace(/\s+/g, " ").trim();
-  if (!clean) return;
-
-  stopSpeaking();
-  // cancel() then immediate speak() is a known Chrome silence bug.
-  await wait(60);
-
-  const voices = await loadSpeechVoices();
-  const voice = pickVoice(voices);
-
-  await new Promise<void>((resolve) => {
+function speakChunk(
+  text: string,
+  voice: SpeechSynthesisVoice | null,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
     let settled = false;
-    const finish = () => {
+    const finish = (err?: Error) => {
       if (settled) return;
       settled = true;
       window.clearInterval(resumeTimer);
       window.clearTimeout(failsafeTimer);
-      resolve();
+      if (err) reject(err);
+      else resolve();
     };
 
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.05;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.02;
     utterance.pitch = 1;
+    utterance.volume = 1;
     utterance.lang = voice?.lang || "en-US";
     if (voice) utterance.voice = voice;
+
+    let started = false;
     utterance.onstart = () => {
+      started = true;
       try {
         window.speechSynthesis.resume();
       } catch {
@@ -323,38 +322,104 @@ export async function speakText(text: string): Promise<void> {
       }
     };
     utterance.onend = () => finish();
-    utterance.onerror = () => finish();
+    utterance.onerror = (event) => {
+      // "interrupted" / "canceled" are expected when we stop for a new reply.
+      const code = String(event.error || "");
+      if (code === "interrupted" || code === "canceled") {
+        finish();
+        return;
+      }
+      finish(new Error(`speechSynthesis error: ${code || "unknown"}`));
+    };
 
-    // Chrome bug: synthesis silently pauses unless periodically resumed.
     const resumeTimer = window.setInterval(() => {
       try {
-        if (
-          window.speechSynthesis.speaking ||
-          window.speechSynthesis.paused ||
-          window.speechSynthesis.pending
-        ) {
-          window.speechSynthesis.resume();
-        }
+        window.speechSynthesis.resume();
       } catch {
         // ignore
       }
-    }, 250);
+    }, 200);
 
-    // ~60ms/char + buffer, clamped so short questions still unlock quickly.
-    const ms = Math.min(45_000, Math.max(4_000, clean.length * 60 + 2_000));
+    const ms = Math.min(30_000, Math.max(3_000, text.length * 70 + 1_500));
     const failsafeTimer = window.setTimeout(() => {
-      stopSpeaking();
+      if (!started) {
+        finish(new Error("speechSynthesis never started"));
+        return;
+      }
       finish();
     }, ms);
 
     try {
       window.speechSynthesis.resume();
       window.speechSynthesis.speak(utterance);
-      window.speechSynthesis.resume();
-    } catch {
-      finish();
+      // Second resume after a tick helps Chrome leave paused state.
+      window.setTimeout(() => {
+        try {
+          window.speechSynthesis.resume();
+        } catch {
+          // ignore
+        }
+      }, 50);
+    } catch (error) {
+      finish(
+        error instanceof Error ? error : new Error("speechSynthesis.speak failed"),
+      );
     }
   });
+}
+
+/** Split long replies so Chrome doesn't drop the utterance. */
+function chunkForSpeech(text: string) {
+  const max = 180;
+  if (text.length <= max) return [text];
+
+  const parts: string[] = [];
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [text];
+  let buf = "";
+  for (const sentence of sentences) {
+    const next = sentence.trim();
+    if (!next) continue;
+    if ((buf + " " + next).trim().length > max && buf) {
+      parts.push(buf.trim());
+      buf = next;
+    } else {
+      buf = `${buf} ${next}`.trim();
+    }
+  }
+  if (buf) parts.push(buf.trim());
+  return parts.length > 0 ? parts : [text];
+}
+
+/**
+ * Speak text via browser TTS.
+ * Call from a user gesture when possible (Test voice / Speak toggle).
+ * Async reply readbacks still work after priming voices on that gesture.
+ */
+export async function speakText(text: string): Promise<void> {
+  if (!isSpeechSynthesisSupported()) {
+    throw new Error("This browser has no speechSynthesis (try Chrome or Edge).");
+  }
+
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return;
+
+  // Only cancel if something is already queued/speaking.
+  if (
+    window.speechSynthesis.speaking ||
+    window.speechSynthesis.pending ||
+    window.speechSynthesis.paused
+  ) {
+    stopSpeaking();
+    await wait(120);
+  }
+
+  const voices = await loadSpeechVoices();
+  const voice = pickVoice(voices);
+  const chunks = chunkForSpeech(clean);
+
+  for (const chunk of chunks) {
+    await speakChunk(chunk, voice);
+  }
 }
 
 export const AMBIENT_STORAGE_KEY = "jarvis.ambient.enabled";

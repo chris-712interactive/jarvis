@@ -73,6 +73,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   const [hydrated, setHydrated] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [pushListening, setPushListening] = useState(false);
+  const [ttsError, setTtsError] = useState<string | null>(null);
 
   const projectIdRef = useRef(projectId);
   const conversationIdRef = useRef(conversationId);
@@ -85,9 +86,33 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     async () => undefined,
   );
   const clearErrorRef = useRef<() => void>(() => undefined);
+  const speakAssistantRef = useRef<(message: UIMessage) => void>(() => undefined);
   projectIdRef.current = projectId;
   conversationIdRef.current = conversationId;
   speakRepliesRef.current = speakReplies;
+
+  function speakAssistantMessage(message: UIMessage) {
+    if (!speakRepliesRef.current) return;
+    if (message.role !== "assistant") return;
+    if (message.id === lastSpokenIdRef.current) return;
+
+    const text = textForSpeech(messageText(message));
+    if (!text) return;
+
+    lastSpokenIdRef.current = message.id;
+    voiceOriginRef.current = false;
+    setTtsError(null);
+    setSpeaking(true);
+    void speakText(text)
+      .catch((err) => {
+        console.error("[uplink] speak failed", err);
+        setTtsError(
+          err instanceof Error ? err.message : "Browser speech failed",
+        );
+      })
+      .finally(() => setSpeaking(false));
+  }
+  speakAssistantRef.current = speakAssistantMessage;
 
   const transport = useMemo(
     () =>
@@ -142,6 +167,9 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
         console.error("[uplink]", err);
         voiceOriginRef.current = false;
       },
+      onFinish: ({ message }) => {
+        speakAssistantRef.current(message);
+      },
     });
 
   const busy = status === "submitted" || status === "streaming";
@@ -157,7 +185,6 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     setInput("");
     clearErrorRef.current();
     primeSpeechSynthesis();
-    stopSpeaking();
     try {
       await sendMessageRef.current({ text: trimmed });
     } catch (err) {
@@ -360,7 +387,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     }
   }, [status, messages]);
 
-  // Speak assistant replies (typed or voice) when Speak is on.
+  // Backup speak path if onFinish didn't fire (SDK edge cases).
   useEffect(() => {
     if (status !== "ready") return;
     if (!speakReplies) {
@@ -371,25 +398,11 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     const lastAssistant = [...messages]
       .reverse()
       .find((message) => message.role === "assistant");
-    if (!lastAssistant || lastAssistant.id === lastSpokenIdRef.current) {
-      if (!lastAssistant) voiceOriginRef.current = false;
+    if (!lastAssistant) {
+      voiceOriginRef.current = false;
       return;
     }
-
-    const text = textForSpeech(messageText(lastAssistant));
-    if (!text) {
-      // Tool-only assistant turn — wait for text parts to arrive on a later update.
-      return;
-    }
-
-    lastSpokenIdRef.current = lastAssistant.id;
-    voiceOriginRef.current = false;
-    setSpeaking(true);
-    void speakText(text)
-      .catch((err) => {
-        console.error("[uplink] speak failed", err);
-      })
-      .finally(() => setSpeaking(false));
+    speakAssistantMessage(lastAssistant);
   }, [status, messages, speakReplies]);
 
   async function onSubmit(event: React.FormEvent) {
@@ -399,14 +412,28 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     voiceOriginRef.current = false;
     primeSpeechSynthesis();
     stopMic({ send: false });
-    stopSpeaking();
-    setSpeaking(false);
     setInput("");
     clearError();
     try {
       await sendMessage({ text });
     } catch (err) {
       console.error("[uplink] send failed", err);
+    }
+  }
+
+  async function testVoice() {
+    primeSpeechSynthesis();
+    setTtsError(null);
+    setSpeaking(true);
+    try {
+      await speakText("Operator uplink online. Speech is working.");
+    } catch (err) {
+      console.error("[uplink] test voice failed", err);
+      setTtsError(
+        err instanceof Error ? err.message : "Browser speech failed",
+      );
+    } finally {
+      setSpeaking(false);
     }
   }
 
@@ -505,8 +532,19 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                   if (!next) {
                     stopSpeaking();
                     setSpeaking(false);
+                    setTtsError(null);
                   } else {
                     primeSpeechSynthesis();
+                    setSpeaking(true);
+                    void speakText("Speak on.")
+                      .catch((err) => {
+                        setTtsError(
+                          err instanceof Error
+                            ? err.message
+                            : "Browser speech failed",
+                        );
+                      })
+                      .finally(() => setSpeaking(false));
                   }
                   return next;
                 });
@@ -519,6 +557,15 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               title="Speak operator replies out loud"
             >
               {speakReplies ? "Speak on" : "Speak off"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void testVoice()}
+              disabled={configured !== true || speaking}
+              className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
+              title="Play a short test phrase to verify browser speech"
+            >
+              Test voice
             </button>
             <label className="flex min-w-0 flex-1 items-center gap-2">
               <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
@@ -643,6 +690,12 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             {!speechSupported ? (
               <p className="text-xs text-ink-soft">
                 Voice needs Chrome or Edge. Typing still works.
+              </p>
+            ) : null}
+            {ttsError ? (
+              <p className="text-xs text-signal">
+                Speech error: {ttsError}. Click <span className="font-mono">Test voice</span>{" "}
+                (Chrome/Edge, tab not muted).
               </p>
             ) : null}
             {ambientEnabled && ambientListening && !busy && !speaking ? (
