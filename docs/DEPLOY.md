@@ -51,7 +51,9 @@ One replica only — SQLite does not like multiple writers.
 | `CURSOR_API_KEY` | for code jobs | Cursor Dashboard → API Keys |
 | `GITHUB_TOKEN` | recommended | private repos + PR CI watchdog |
 | `VERCEL_TOKEN` | for Vercel deploy status | Vercel → Settings → Tokens |
+| `VERCEL_WEBHOOK_SECRET` | for Vercel deploy webhooks | Secret shown when creating the webhook |
 | `RAILWAY_TOKEN` | for Railway deploy status | Railway → Account → Tokens |
+| `DEPLOY_WEBHOOK_SECRET` | for Railway webhook URL | Falls back to `CRON_SECRET`; append `?secret=` on the Railway webhook URL |
 | Gmail / GA4 / GSC | optional | see `apps/web/.env.example` |
 
 Also set if you use Gmail after deploy:
@@ -148,6 +150,14 @@ What `/api/cron/tick` does each run:
 4. Generate morning/evening briefing when the local hour matches
 5. Watch open PR CI on lanes with GitHub repos (notify once on failure)
 6. Probe production URL / Vercel / Railway status on configured lanes (notify on down/degraded)
+
+### Deploy webhooks (near-real-time)
+
+1. Set `DEPLOY_WEBHOOK_SECRET` (or reuse `CRON_SECRET`) and `VERCEL_WEBHOOK_SECRET` on Jarvis
+2. **Vercel** → Team/Account Settings → Webhooks → endpoint `https://YOUR_JARVIS/api/webhooks/vercel` (events: deployment created/succeeded/error/canceled)
+3. **Railway** → each project Settings → Webhooks → `https://YOUR_JARVIS/api/webhooks/railway?secret=YOUR_SECRET`
+4. Lane `deployProjectId` must match the Vercel project id/name or Railway project/service id
+5. Hub **Live environments** strip reads cached status and polls `/api/deploy/overview` every 60s
 
 ### Host crontab example
 

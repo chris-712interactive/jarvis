@@ -24,7 +24,7 @@ Project Hub + dashboard shell in `apps/web`:
 - **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; approve-before-post
 - **GA4 lane analytics** — `get_lane_analytics` + `GET /api/projects/:id/analytics`
 - **Search Console SEO** — `get_lane_search` + `GET /api/projects/:id/search-console`
-- **Production deploy health** — URL probe + Vercel/Railway status; `get_lane_deploy` / cron `deployHealth`
+- **Production deploy health** — URL probe + Vercel/Railway status, hub Live environments strip, deploy webhooks
 - **Gmail → code agents** — allowlisted senders → Cloud Agent PR → Approve & reply
 - **Scheduled tick + briefings** — `/api/cron/tick` advances jobs, email, daily content, morning/evening briefings, PR CI watchdog, and deploy health
 
@@ -56,6 +56,10 @@ Operator tools:
 4. For Railway: set `RAILWAY_TOKEN`; id = Railway **service** id
 5. Cron tick refreshes status and alerts on down/degraded; ask “is Clean Scheduler up?” for `get_lane_deploy`
 6. Or `GET /api/projects/:id/deploy?refresh=1`
+7. For near-real-time updates, add webhooks:
+   - Vercel → `https://YOUR_JARVIS/api/webhooks/vercel` + `VERCEL_WEBHOOK_SECRET`
+   - Railway → `https://YOUR_JARVIS/api/webhooks/railway?secret=DEPLOY_WEBHOOK_SECRET` (or `CRON_SECRET`)
+8. Hub **Live environments** strip polls `/api/deploy/overview` every 60s
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
 - `research` / `ops` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
