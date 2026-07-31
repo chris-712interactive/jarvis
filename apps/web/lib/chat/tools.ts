@@ -47,6 +47,10 @@ import {
   getLatestBriefing,
 } from "@/lib/briefing/generate";
 import { runPrWatchdog } from "@/lib/jobs/pr-watchdog";
+import {
+  refreshProjectDeployStatus,
+  runDeployWatchdog,
+} from "@/lib/jobs/deploy-watchdog";
 import { jobKinds, interruptLevels } from "@/lib/db/schema";
 
 function vaultErrorMessage(error: unknown) {
@@ -150,6 +154,12 @@ export function createOperatorTools(activeProjectId?: string | null) {
             vaultPath: p.vaultPath,
             gaPropertyId: p.gaPropertyId,
             gscSiteUrl: p.gscSiteUrl,
+            productionUrl: p.productionUrl,
+            deployHost: p.deployHost,
+            deployProjectId: p.deployProjectId,
+            deployStatus: p.deployStatus,
+            deployStatusDetail: p.deployStatusDetail,
+            deployCheckedAt: p.deployCheckedAt,
             contentChannel: p.contentChannel,
             dailyContent: p.dailyContent,
             emailSenders: p.emailSenders,
@@ -217,6 +227,12 @@ export function createOperatorTools(activeProjectId?: string | null) {
             vaultPath: project.vaultPath,
             gaPropertyId: project.gaPropertyId,
             gscSiteUrl: project.gscSiteUrl,
+            productionUrl: project.productionUrl,
+            deployHost: project.deployHost,
+            deployProjectId: project.deployProjectId,
+            deployStatus: project.deployStatus,
+            deployStatusDetail: project.deployStatusDetail,
+            deployCheckedAt: project.deployCheckedAt,
             contentChannel: project.contentChannel,
             contentBrief: project.contentBrief,
             dailyContent: project.dailyContent,
@@ -1037,6 +1053,69 @@ export function createOperatorTools(activeProjectId?: string | null) {
               : result.failing.length > 0
                 ? "Failing PRs found but already notified recently."
                 : "No failing CI on scanned open PRs.",
+        };
+      },
+    }),
+
+    get_lane_deploy: tool({
+      description:
+        "Live production status for a lane: URL health check plus Vercel/Railway deploy state when configured. Persists the result on the lane for the dashboard. Requires productionUrl and/or deployHost + deployProjectId.",
+      inputSchema: z.object({
+        ...laneFields,
+      }),
+      execute: async ({ projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
+        if (
+          !project.productionUrl?.trim() &&
+          !project.deployProjectId?.trim()
+        ) {
+          return {
+            error: `Lane "${project.name}" has no productionUrl or deployProjectId. Set them on the project edit form.`,
+          };
+        }
+        try {
+          const snapshot = await refreshProjectDeployStatus(project);
+          return {
+            matchedBy: resolved.matchedBy,
+            ...snapshot,
+            note: "Use status/detail for operator answers. Do not invent uptime beyond this probe.",
+          };
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Deploy status check failed",
+          };
+        }
+      },
+    }),
+
+    check_deploy_health: tool({
+      description:
+        "Scan all active lanes with production URL / deploy ids, refresh cached status, and create Alerts for down/degraded. Same step as cron /api/cron/tick deployHealth.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const result = await runDeployWatchdog();
+        return {
+          ...result,
+          note:
+            result.notified.length > 0
+              ? `Posted ${result.notified.length} deploy alert(s).`
+              : result.unhealthy.length > 0
+                ? "Unhealthy lanes found but already notified recently."
+                : "All monitored production lanes look healthy (or none configured).",
         };
       },
     }),

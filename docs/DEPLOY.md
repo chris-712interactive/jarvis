@@ -50,7 +50,9 @@ One replica only — SQLite does not like multiple writers.
 | `BRIEFING_TZ` | recommended | IANA timezone, e.g. `America/Chicago` (not `CST`) |
 | `CURSOR_API_KEY` | for code jobs | Cursor Dashboard → API Keys |
 | `GITHUB_TOKEN` | recommended | private repos + PR CI watchdog |
-| Gmail / GA4 | optional | see `apps/web/.env.example` |
+| `VERCEL_TOKEN` | for Vercel deploy status | Vercel → Settings → Tokens |
+| `RAILWAY_TOKEN` | for Railway deploy status | Railway → Account → Tokens |
+| Gmail / GA4 / GSC | optional | see `apps/web/.env.example` |
 
 Also set if you use Gmail after deploy:
 
@@ -98,7 +100,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
   "https://YOUR_RAILWAY_DOMAIN/api/cron/tick"
 ```
 
-Expect JSON with `jobs`, `email`, `dailyContent`, `briefings`, `watchdog`.
+Expect JSON with `jobs`, `email`, `dailyContent`, `briefings`, `watchdog`, `deployHealth`.
 
 ### Alternate: Nixpacks with Root Directory
 
@@ -145,6 +147,7 @@ What `/api/cron/tick` does each run:
 3. Queue daily content drafts (idempotent per day)
 4. Generate morning/evening briefing when the local hour matches
 5. Watch open PR CI on lanes with GitHub repos (notify once on failure)
+6. Probe production URL / Vercel / Railway status on configured lanes (notify on down/degraded)
 
 ### Host crontab example
 
@@ -167,4 +170,5 @@ Query helpers on tick: `?forceBriefing=1`, `?forceContent=1`, `?skipWatchdog=1`,
 
 - `get_briefing` / `run_briefing` — read or generate digests
 - `check_pr_ci` — run the PR CI watchdog on demand
+- `get_lane_deploy` / `check_deploy_health` — production URL + Vercel/Railway status
 - `ingest_emails` / `draft_daily_post` — same as before

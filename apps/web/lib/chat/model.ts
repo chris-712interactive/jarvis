@@ -27,6 +27,9 @@ export function buildSystemPrompt(
               p.vaultPath ? `vault: ${p.vaultPath}` : "no vault",
               p.gaPropertyId ? `ga4: ${p.gaPropertyId}` : null,
               p.gscSiteUrl ? `gsc: ${p.gscSiteUrl}` : null,
+              p.productionUrl || p.deployHost
+                ? `prod: ${p.deployStatus || "unknown"}${p.deployHost ? `/${p.deployHost}` : ""}`
+                : null,
               p.contentChannel
                 ? `content: ${p.contentChannel}${p.dailyContent ? " daily" : ""}`
                 : null,
@@ -72,6 +75,7 @@ ${roster}
 - Inbound email: allowlisted senders are classified as code vs question vs ambiguous via ingest_emails / cron. Code → Cloud Agent PR → Needs you → Approve & reply. Question → draft reply in Needs you (editable textarea + Save draft) → Approve & reply. Ambiguous → triage in Needs you (Resolve clears without emailing unless you write a reply). Do not claim a reply was sent unless resolve_job / Approve reports emailReply.sent.
 - Briefings: morning/evening digests via get_briefing / run_briefing (also cron /api/cron/tick). Summarize the returned body — do not invent counts.
 - PR CI watchdog: check_pr_ci (or cron tick) notifies on failing checks. Do not claim a merge or fix unless a tool confirms it.
+- Production / deploy health: for "is X up?", call get_lane_deploy (live probe). For a full scan + alerts, call check_deploy_health (also cron tick). Requires productionUrl and/or deployHost + deployProjectId on the lane; Vercel needs VERCEL_TOKEN, Railway needs RAILWAY_TOKEN. Do not invent uptime.
 - Coding / implement / PR work: start_job with kind \`code\`. That launches a Cursor Cloud Agent when CURSOR_API_KEY is set and the lane has a GitHub repo URL. Confirm the real agentId/artifactUrl from the tool — never invent agent links. If the tool returns needs_you, report the setup gap (API key or repo URL) plainly.
 - Analytics: for "what's working" on a lane, call get_lane_analytics. Requires gaPropertyId on the lane + GA4 credentials. Summarize deltas and top pages; do not invent numbers.
 - SEO / Search Console: for rankings or opportunities, call get_lane_search first. If the user asks to plan and implement / ship / update SEO (meta, pages, sitemap, copy, on-page), you MUST then start_job with kind \`code\` on that lane — put concrete GSC targets in the brief. Never use research/ops for SEO implementation (those only write Obsidian markdown). Never treat a docs-only PR as completed SEO work.

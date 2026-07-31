@@ -494,8 +494,26 @@ export function ProjectsSection({ projects }: { projects: Project[] }) {
                   <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-beam">
                     {String(index + 1).padStart(2, "0")}
                   </span>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft/70">
-                    {project.status}
+                  <span className="flex flex-col items-end gap-1">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft/70">
+                      {project.status}
+                    </span>
+                    {project.productionUrl || project.deployHost ? (
+                      <span
+                        className={`font-mono text-[10px] uppercase tracking-[0.16em] ${
+                          project.deployStatus === "ok"
+                            ? "text-flight"
+                            : project.deployStatus === "building"
+                              ? "text-beam"
+                              : project.deployStatus === "down" ||
+                                  project.deployStatus === "degraded"
+                                ? "text-signal"
+                                : "text-ink-soft/70"
+                        }`}
+                      >
+                        prod {project.deployStatus || "unknown"}
+                      </span>
+                    ) : null}
                   </span>
                 </div>
                 <p className="mt-3 font-[family-name:var(--font-display)] text-xl font-bold tracking-tight">

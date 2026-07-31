@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  deployHosts,
   interruptLevels,
   jobKinds,
   jobStatuses,
@@ -52,6 +53,16 @@ export const createProjectSchema = z.object({
   needsYou: optionalText,
   gaPropertyId: optionalText,
   gscSiteUrl: optionalText,
+  productionUrl: optionalUrl,
+  deployHost: z
+    .union([z.enum(deployHosts), z.literal(""), z.null()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) return undefined;
+      if (value === "" || value === null) return null;
+      return value;
+    }),
+  deployProjectId: optionalText,
   contentChannel: optionalText,
   contentBrief: z.string().trim().max(4000).optional().default(""),
   dailyContent: optionalBool,

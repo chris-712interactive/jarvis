@@ -11,6 +11,7 @@ import { authorizeCron, cronUnauthorized } from "@/lib/jobs/cron-auth";
 import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
 import { ingestInboundEmails } from "@/lib/jobs/email-ingest";
 import { runPrWatchdog } from "@/lib/jobs/pr-watchdog";
+import { runDeployWatchdog } from "@/lib/jobs/deploy-watchdog";
 import { processQueuedJobs } from "@/lib/jobs/runner";
 
 export const runtime = "nodejs";
@@ -36,7 +37,7 @@ async function step<T>(
 /**
  * Unified scheduler tick — call every 5–15 minutes from host cron.
  * Advances jobs, ingests email, queues daily content, sends briefings in-window,
- * and watches open PR CI.
+ * and watches open PR CI + production deploy/health.
  *
  * Each step is isolated so one failure returns JSON details instead of a bare 500.
  */
@@ -101,12 +102,20 @@ async function run(request: Request) {
       }
     : await step("watchdog", () => runPrWatchdog());
 
+  const deployResult = skipWatchdog
+    ? {
+        ok: true as const,
+        data: { skipped: true as const },
+      }
+    : await step("deployHealth", () => runDeployWatchdog());
+
   const errors = [
     !jobsResult.ok ? `jobs: ${jobsResult.error}` : null,
     !emailResult.ok ? `email: ${emailResult.error}` : null,
     !dailyContentResult.ok ? `dailyContent: ${dailyContentResult.error}` : null,
     !briefingsResult.ok ? `briefings: ${briefingsResult.error}` : null,
     !watchdogResult.ok ? `watchdog: ${watchdogResult.error}` : null,
+    !deployResult.ok ? `deployHealth: ${deployResult.error}` : null,
   ].filter(Boolean) as string[];
 
   return NextResponse.json({
@@ -123,6 +132,9 @@ async function run(request: Request) {
     watchdog: watchdogResult.ok
       ? watchdogResult.data
       : { error: watchdogResult.error },
+    deployHealth: deployResult.ok
+      ? deployResult.data
+      : { error: deployResult.error },
     errors,
   });
 }

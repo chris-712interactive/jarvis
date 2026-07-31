@@ -76,6 +76,60 @@ export default async function ProjectDetailPage({ params }: Params) {
                   gsc // {project.gscSiteUrl}
                 </p>
               ) : null}
+              {project.productionUrl || project.deployHost ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <span
+                    className={`inline-flex items-center gap-2 border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] ${
+                      project.deployStatus === "ok"
+                        ? "border-flight/40 text-flight"
+                        : project.deployStatus === "building"
+                          ? "border-beam/40 text-beam"
+                          : project.deployStatus === "down" ||
+                              project.deployStatus === "degraded"
+                            ? "border-signal/50 text-signal"
+                            : "border-ink-soft/30 text-ink-soft"
+                    }`}
+                  >
+                    <span
+                      className={`live-dot ${
+                        project.deployStatus === "ok"
+                          ? "bg-flight"
+                          : project.deployStatus === "building"
+                            ? "bg-beam"
+                            : project.deployStatus === "down" ||
+                                project.deployStatus === "degraded"
+                              ? "bg-signal"
+                              : "bg-ink-soft/40"
+                      } ${
+                        project.deployStatus === "ok" ||
+                        project.deployStatus === "building"
+                          ? "lane-pulse"
+                          : ""
+                      }`}
+                    />
+                    prod // {project.deployStatus || "unknown"}
+                    {project.deployHost ? ` · ${project.deployHost}` : ""}
+                  </span>
+                  {project.productionUrl ? (
+                    <a
+                      href={project.productionUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[11px] text-beam underline decoration-beam/40 underline-offset-4 hover:decoration-beam"
+                    >
+                      {project.productionUrl}
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+              {project.deployStatusDetail ? (
+                <p className="mt-2 max-w-2xl font-mono text-[11px] leading-relaxed text-ink-soft">
+                  {project.deployStatusDetail}
+                  {project.deployCheckedAt
+                    ? ` · checked ${project.deployCheckedAt.toISOString()}`
+                    : ""}
+                </p>
+              ) : null}
               {project.contentChannel || project.dailyContent ? (
                 <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
                   content // {project.contentChannel || "channel"}
@@ -155,6 +209,14 @@ export default async function ProjectDetailPage({ params }: Params) {
                   needsYou: project.needsYou ?? "",
                   gaPropertyId: project.gaPropertyId ?? "",
                   gscSiteUrl: project.gscSiteUrl ?? "",
+                  productionUrl: project.productionUrl ?? "",
+                  deployHost: (project.deployHost ?? "") as
+                    | ""
+                    | "url"
+                    | "vercel"
+                    | "railway"
+                    | "aws",
+                  deployProjectId: project.deployProjectId ?? "",
                   contentChannel: project.contentChannel ?? "",
                   contentBrief: project.contentBrief ?? "",
                   dailyContent: Boolean(project.dailyContent),

@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 
 const statuses = ["active", "paused", "archived"] as const;
 const interrupts = ["silent", "digest", "nudge", "interrupt"] as const;
+const deployHosts = ["url", "vercel", "railway", "aws"] as const;
 
 const fieldClass = "field";
 
@@ -25,6 +26,9 @@ export function ProjectForm({
     needsYou: string;
     gaPropertyId: string;
     gscSiteUrl: string;
+    productionUrl: string;
+    deployHost: "" | (typeof deployHosts)[number];
+    deployProjectId: string;
     contentChannel: string;
     contentBrief: string;
     dailyContent: boolean;
@@ -52,6 +56,9 @@ export function ProjectForm({
       needsYou: String(form.get("needsYou") ?? "") || null,
       gaPropertyId: String(form.get("gaPropertyId") ?? "") || null,
       gscSiteUrl: String(form.get("gscSiteUrl") ?? "") || null,
+      productionUrl: String(form.get("productionUrl") ?? "") || null,
+      deployHost: String(form.get("deployHost") ?? "") || null,
+      deployProjectId: String(form.get("deployProjectId") ?? "") || null,
       contentChannel: String(form.get("contentChannel") ?? "") || null,
       contentBrief: String(form.get("contentBrief") ?? ""),
       dailyContent: String(form.get("dailyContent") ?? "false") === "true",
@@ -178,6 +185,44 @@ export function ProjectForm({
           placeholder="sc-domain:example.com or https://example.com/"
         />
       </Field>
+
+      <Field label="Production URL" htmlFor="productionUrl">
+        <input
+          id="productionUrl"
+          name="productionUrl"
+          type="url"
+          defaultValue={initial?.productionUrl}
+          className={fieldClass}
+          placeholder="https://app.example.com"
+        />
+      </Field>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Deploy host" htmlFor="deployHost">
+          <select
+            id="deployHost"
+            name="deployHost"
+            defaultValue={initial?.deployHost || ""}
+            className={fieldClass}
+          >
+            <option value="">none</option>
+            {deployHosts.map((host) => (
+              <option key={host} value={host}>
+                {host}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Deploy project / service id" htmlFor="deployProjectId">
+          <input
+            id="deployProjectId"
+            name="deployProjectId"
+            defaultValue={initial?.deployProjectId}
+            className={fieldClass}
+            placeholder="Vercel project id/name or Railway service id"
+          />
+        </Field>
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Content channel" htmlFor="contentChannel">
