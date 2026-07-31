@@ -17,6 +17,7 @@ import {
   speakText,
   stopSpeaking,
   textForSpeech,
+  unlockSpeechSynthesis,
 } from "@/lib/speech/browser";
 import type { Project } from "@/lib/db/schema";
 
@@ -422,11 +423,17 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   }
 
   async function testVoice() {
+    // Gesture-bound unlock must be sync (before any await).
+    unlockSpeechSynthesis();
     primeSpeechSynthesis();
     setTtsError(null);
     setSpeaking(true);
     try {
-      await speakText("Operator uplink online. Speech is working.");
+      // Prefer the browser default voice for the probe — custom voices are a
+      // common Chrome "never started" failure mode.
+      await speakText("Operator uplink online. Speech is working.", {
+        forceDefaultVoice: true,
+      });
     } catch (err) {
       console.error("[uplink] test voice failed", err);
       setTtsError(
@@ -475,7 +482,10 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
         onClick={() =>
           setOpen((value) => {
             const next = !value;
-            if (next) primeSpeechSynthesis();
+            if (next) {
+              unlockSpeechSynthesis();
+              primeSpeechSynthesis();
+            }
             return next;
           })
         }
@@ -534,6 +544,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                     setSpeaking(false);
                     setTtsError(null);
                   } else {
+                    unlockSpeechSynthesis();
                     primeSpeechSynthesis();
                     setSpeaking(true);
                     void speakText("Speak on.")
@@ -694,8 +705,9 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             ) : null}
             {ttsError ? (
               <p className="text-xs text-signal">
-                Speech error: {ttsError}. Click <span className="font-mono">Test voice</span>{" "}
-                (Chrome/Edge, tab not muted).
+                Speech error: {ttsError}. Click{" "}
+                <span className="font-mono">Test voice</span> again (Chrome/Edge,
+                tab unmuted, site Sound set to Allow).
               </p>
             ) : null}
             {ambientEnabled && ambientListening && !busy && !speaking ? (

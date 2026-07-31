@@ -27,6 +27,7 @@ type SpeechWindow = Window & {
 
 let voicesCache: SpeechSynthesisVoice[] | null = null;
 let voicesLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+let speechUnlocked = false;
 
 export function getSpeechRecognitionConstructor() {
   if (typeof window === "undefined") return null;
@@ -205,6 +206,7 @@ export function stopSpeaking() {
   if (!isSpeechSynthesisSupported()) return;
   try {
     window.speechSynthesis.cancel();
+    // Chrome often stays paused after cancel; resume so the next speak can start.
     window.speechSynthesis.resume();
   } catch {
     // ignore
@@ -227,7 +229,10 @@ export function loadSpeechVoices(): Promise<SpeechSynthesisVoice[]> {
 
   voicesLoadPromise = new Promise((resolve) => {
     const finish = (voices: SpeechSynthesisVoice[]) => {
-      voicesCache = voices;
+      if (voices.length > 0) {
+        voicesCache = voices;
+      }
+      voicesLoadPromise = null;
       resolve(voices);
     };
 
@@ -247,7 +252,8 @@ export function loadSpeechVoices(): Promise<SpeechSynthesisVoice[]> {
     const onChange = () => done();
     window.speechSynthesis.addEventListener("voiceschanged", onChange);
     void window.speechSynthesis.getVoices();
-    window.setTimeout(done, 1000);
+    // Keep this short so Test voice stays inside the user-activation window.
+    window.setTimeout(done, 250);
   });
 
   return voicesLoadPromise;
@@ -262,45 +268,81 @@ function pickVoice(voices: SpeechSynthesisVoice[]) {
 
   // Prefer local/device voices. Skip Chrome "Google" online voices — often silent.
   const local = pool.filter(
-    (voice) =>
-      voice.localService && !/google/i.test(voice.name),
+    (voice) => voice.localService && !/google/i.test(voice.name),
   );
   if (local.length > 0) {
     return (
-      local.find((voice) => /samantha|daniel|karen|moira|reed|aaron|flo/i.test(voice.name)) ??
-      local[0]
+      local.find((voice) =>
+        /samantha|daniel|karen|moira|reed|aaron|flo|microsoft|zira|david/i.test(
+          voice.name,
+        ),
+      ) ?? local[0]
     );
   }
 
   const nonGoogle = pool.filter((voice) => !/google/i.test(voice.name));
-  return nonGoogle[0] ?? pool[0];
+  return nonGoogle[0] ?? pool[0] ?? null;
 }
 
 /**
- * Soft unlock on a user gesture: load voices + resume.
- * Avoids cancel() here — cancel-after-warm leaves Chrome stuck silent.
+ * Must run synchronously inside a click/tap handler.
+ * Resumes Chrome's often-stuck paused state, loads voices, and primes TTS.
  */
-export function primeSpeechSynthesis() {
+export function unlockSpeechSynthesis() {
   if (!isSpeechSynthesisSupported()) return;
   try {
     void loadSpeechVoices();
     window.speechSynthesis.resume();
+
+    if (speechUnlocked) return;
+
+    const warm = new SpeechSynthesisUtterance(" ");
+    warm.volume = 0;
+    warm.rate = 2;
+    warm.pitch = 1;
+    warm.onend = () => {
+      speechUnlocked = true;
+    };
+    warm.onerror = () => {
+      speechUnlocked = true;
+    };
+    window.speechSynthesis.speak(warm);
+    speechUnlocked = true;
   } catch {
     // ignore
   }
 }
 
+/**
+ * Soft unlock on a user gesture: silent warm-up + load voices + resume.
+ * Call this from click handlers before any await.
+ */
+export function primeSpeechSynthesis() {
+  if (!isSpeechSynthesisSupported()) return;
+  unlockSpeechSynthesis();
+}
+
+type SpeakChunkOptions = {
+  voice?: SpeechSynthesisVoice | null;
+  /** How long to wait for onstart before failing/retrying. */
+  startTimeoutMs?: number;
+};
+
 function speakChunk(
   text: string,
-  voice: SpeechSynthesisVoice | null,
+  options: SpeakChunkOptions = {},
 ): Promise<void> {
+  const voice = options.voice ?? null;
+  const startTimeoutMs = options.startTimeoutMs ?? 2_000;
+
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (err?: Error) => {
       if (settled) return;
       settled = true;
       window.clearInterval(resumeTimer);
-      window.clearTimeout(failsafeTimer);
+      window.clearTimeout(startTimer);
+      window.clearTimeout(endFailsafe);
       if (err) reject(err);
       else resolve();
     };
@@ -315,6 +357,7 @@ function speakChunk(
     let started = false;
     utterance.onstart = () => {
       started = true;
+      speechUnlocked = true;
       try {
         window.speechSynthesis.resume();
       } catch {
@@ -323,54 +366,101 @@ function speakChunk(
     };
     utterance.onend = () => finish();
     utterance.onerror = (event) => {
-      // "interrupted" / "canceled" are expected when we stop for a new reply.
       const code = String(event.error || "");
       if (code === "interrupted" || code === "canceled") {
         finish();
         return;
       }
+      if (code === "not-allowed") {
+        finish(
+          new Error(
+            "speechSynthesis not-allowed — click Test voice again (Chrome needs a user gesture / Sound allowed for this site).",
+          ),
+        );
+        return;
+      }
       finish(new Error(`speechSynthesis error: ${code || "unknown"}`));
     };
 
+    // Chrome can freeze in paused=true; keep nudging while this chunk is live.
     const resumeTimer = window.setInterval(() => {
       try {
-        window.speechSynthesis.resume();
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
       } catch {
         // ignore
       }
-    }, 200);
+    }, 250);
 
-    const ms = Math.min(30_000, Math.max(3_000, text.length * 70 + 1_500));
-    const failsafeTimer = window.setTimeout(() => {
+    const startTimer = window.setTimeout(() => {
       if (!started) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
         finish(new Error("speechSynthesis never started"));
-        return;
       }
-      finish();
-    }, ms);
+    }, startTimeoutMs);
+
+    // Absolute cap so a hung utterance cannot block the uplink forever.
+    const endFailsafe = window.setTimeout(
+      () => {
+        if (started) finish();
+      },
+      Math.min(45_000, Math.max(8_000, text.length * 80 + 4_000)),
+    );
 
     try {
       window.speechSynthesis.resume();
       window.speechSynthesis.speak(utterance);
-      // Second resume after a tick helps Chrome leave paused state.
       window.setTimeout(() => {
         try {
-          window.speechSynthesis.resume();
+          if (!started && window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
         } catch {
           // ignore
         }
-      }, 50);
+      }, 40);
     } catch (error) {
       finish(
-        error instanceof Error ? error : new Error("speechSynthesis.speak failed"),
+        error instanceof Error
+          ? error
+          : new Error("speechSynthesis.speak failed"),
       );
     }
   });
 }
 
+async function speakChunkWithRetry(
+  text: string,
+  voice: SpeechSynthesisVoice | null,
+) {
+  try {
+    await speakChunk(text, { voice, startTimeoutMs: 2_000 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/never started|not-allowed/i.test(message)) {
+      throw error;
+    }
+
+    // Chrome recovery: hard reset queue, drop custom voice, speak again.
+    stopSpeaking();
+    await wait(180);
+    try {
+      window.speechSynthesis.resume();
+    } catch {
+      // ignore
+    }
+    await speakChunk(text, { voice: null, startTimeoutMs: 3_500 });
+  }
+}
+
 /** Split long replies so Chrome doesn't drop the utterance. */
 function chunkForSpeech(text: string) {
-  const max = 180;
+  const max = 160;
   if (text.length <= max) return [text];
 
   const parts: string[] = [];
@@ -390,12 +480,29 @@ function chunkForSpeech(text: string) {
   return parts.length > 0 ? parts : [text];
 }
 
+async function voicesForSpeak() {
+  // Prefer sync voices so Test voice can speak inside the click turn.
+  const sync = window.speechSynthesis.getVoices();
+  if (sync.length > 0) {
+    voicesCache = sync;
+    return sync;
+  }
+  const loaded = await Promise.race([
+    loadSpeechVoices(),
+    wait(300).then(() => window.speechSynthesis.getVoices()),
+  ]);
+  return loaded;
+}
+
 /**
  * Speak text via browser TTS.
- * Call from a user gesture when possible (Test voice / Speak toggle).
- * Async reply readbacks still work after priming voices on that gesture.
+ * Call unlockSpeechSynthesis()/primeSpeechSynthesis() from the click handler
+ * before any await when possible (Test voice / Speak toggle).
  */
-export async function speakText(text: string): Promise<void> {
+export async function speakText(
+  text: string,
+  options: { forceDefaultVoice?: boolean } = {},
+): Promise<void> {
   if (!isSpeechSynthesisSupported()) {
     throw new Error("This browser has no speechSynthesis (try Chrome or Edge).");
   }
@@ -403,22 +510,40 @@ export async function speakText(text: string): Promise<void> {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return;
 
-  // Only cancel if something is already queued/speaking.
-  if (
-    window.speechSynthesis.speaking ||
-    window.speechSynthesis.pending ||
-    window.speechSynthesis.paused
-  ) {
-    stopSpeaking();
-    await wait(120);
+  // Sync voice pick when possible so the first speak() can run in this turn.
+  let voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    voicesCache = voices;
   }
 
-  const voices = await loadSpeechVoices();
-  const voice = pickVoice(voices);
   const chunks = chunkForSpeech(clean);
+  if (chunks.length === 0) return;
 
-  for (const chunk of chunks) {
-    await speakChunk(chunk, voice);
+  // Always clear prior queue (including silent unlock warm-up) so Chrome
+  // doesn't stall behind a stuck/paused utterance.
+  stopSpeaking();
+  await wait(100);
+  try {
+    window.speechSynthesis.resume();
+  } catch {
+    // ignore
+  }
+
+  if (voices.length === 0) {
+    voices = await voicesForSpeak();
+  }
+
+  let voice = options.forceDefaultVoice ? null : pickVoice(voices);
+
+  for (let i = 0; i < chunks.length; i += 1) {
+    if (i > 0 && !voice && !options.forceDefaultVoice) {
+      const refreshed = window.speechSynthesis.getVoices();
+      if (refreshed.length > 0) {
+        voicesCache = refreshed;
+        voice = pickVoice(refreshed);
+      }
+    }
+    await speakChunkWithRetry(chunks[i], voice);
   }
 }
 
