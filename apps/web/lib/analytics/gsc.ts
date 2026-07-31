@@ -176,7 +176,7 @@ function loadCredentials(): ServiceAccount {
   }
 
   throw new GscError(
-    "Search Console credentials missing. Set GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) / GOOGLE_APPLICATION_CREDENTIALS, enable Search Console API, and add the service account as a user on the property.",
+    "Search Console credentials missing on the server. Set Railway Variable GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) to the full service-account JSON key file contents, then redeploy.",
     503,
   );
 }

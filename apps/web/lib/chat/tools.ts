@@ -876,7 +876,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
         if (!isGscConfigured()) {
           return {
             error:
-              "Search Console credentials missing. Set GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) / GOOGLE_APPLICATION_CREDENTIALS, enable Search Console API, and add the service account as a user on the property.",
+              "Search Console credentials missing on the server. In Railway Variables, set GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) to the full service-account JSON key file contents, then redeploy. Enabling the Search Console API and adding the SA email on each property is not enough without that env var.",
           };
         }
         try {

@@ -50,7 +50,10 @@ One replica only — SQLite does not like multiple writers.
 | `BRIEFING_TZ` | recommended | IANA timezone, e.g. `America/Chicago` (not `CST`) |
 | `CURSOR_API_KEY` | for code jobs | Cursor Dashboard → API Keys |
 | `GITHUB_TOKEN` | recommended | private repos + PR CI watchdog |
-| Gmail / GA4 / GSC | optional | see `apps/web/.env.example` (Search Console reuses the GA4 service account) |
+| `GA4_SERVICE_ACCOUNT_JSON` | for GA4 / Search Console | Paste the **full** service-account JSON key (one line is fine). Same key is reused for GSC. Or set `GSC_SERVICE_ACCOUNT_JSON` instead. |
+| Gmail OAuth vars | optional | see `apps/web/.env.example` |
+
+Enabling Search Console in GCP and adding the SA email on each property is **not** enough by itself — Railway still needs the private key JSON in one of those env vars.
 
 Also set if you use Gmail after deploy:
 

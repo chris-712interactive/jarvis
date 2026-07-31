@@ -30,7 +30,7 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json(
       {
         error:
-          "Search Console credentials missing. Set GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) / GOOGLE_APPLICATION_CREDENTIALS.",
+          "Search Console credentials missing on the server. Set Railway Variable GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) to the full service-account JSON key, then redeploy.",
       },
       { status: 503 },
     );
