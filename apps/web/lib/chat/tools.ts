@@ -826,7 +826,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     get_lane_search: tool({
       description:
-        "Deep-dive Google Search Console SEO for a lane: clicks, impressions, CTR, average position, top queries/pages, rising and declining queries. Requires gscSiteUrl on the lane plus the shared Google service-account credentials (Search Console API enabled).",
+        "Deep-dive Google Search Console SEO for a lane: clicks, impressions, CTR, average position, top queries/pages, rising/declining queries, device/country splits, submitted sitemaps (errors/warnings/indexed counts), and URL Inspection samples for index coverage. Requires gscSiteUrl on the lane plus the shared Google service-account credentials (Search Console API enabled). URL Inspection may need the SA as Owner on the property.",
       inputSchema: z.object({
         ...laneFields,
         days: z
@@ -836,8 +836,26 @@ export function createOperatorTools(activeProjectId?: string | null) {
           .max(90)
           .optional()
           .describe("Lookback days. Defaults to 28."),
+        includeCoverage: z
+          .boolean()
+          .optional()
+          .describe(
+            "Include sitemaps + URL Inspection. Defaults to true. Set false for a faster performance-only pull.",
+          ),
+        inspectUrl: z
+          .string()
+          .optional()
+          .describe(
+            "Optional absolute page URL to force-inspect (plus top pages). Example: https://example.com/blog/post",
+          ),
       }),
-      execute: async ({ projectId, lane, days }) => {
+      execute: async ({
+        projectId,
+        lane,
+        days,
+        includeCoverage,
+        inspectUrl,
+      }) => {
         const resolved = await resolveLane({
           projectId,
           lane,
@@ -862,17 +880,18 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         }
         try {
-          const summary = await getSearchConsoleSummary(
-            project.gscSiteUrl,
-            days ?? 28,
-          );
+          const summary = await getSearchConsoleSummary(project.gscSiteUrl, {
+            days: days ?? 28,
+            includeCoverage: includeCoverage ?? true,
+            inspectUrls: inspectUrl?.trim() ? [inspectUrl.trim()] : undefined,
+          });
           return {
             matchedBy: resolved.matchedBy,
             projectId: project.id,
             projectName: project.name,
             gscSiteUrl: project.gscSiteUrl,
             summary,
-            note: "Use rising/declining queries + top pages for SEO priorities. Do not invent rankings beyond this data.",
+            note: "Use rising/declining queries, top pages, sitemap errors, and index coverageState/verdict for SEO priorities. Do not invent rankings or index status beyond this data.",
           };
         } catch (error) {
           return { error: gscErrorMessage(error) };

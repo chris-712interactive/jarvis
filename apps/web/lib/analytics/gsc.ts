@@ -2,13 +2,16 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 
 /**
- * Google Search Console Search Analytics (REST + service-account JWT).
- * Docs: https://developers.google.com/webmaster-tools/v1/searchanalytics/query
+ * Google Search Console (REST + service-account JWT).
+ * - Search Analytics: https://developers.google.com/webmaster-tools/v1/searchanalytics/query
+ * - Sitemaps: https://developers.google.com/webmaster-tools/v1/sitemaps
+ * - URL Inspection: https://developers.google.com/webmaster-tools/v1/urlInspection.index/inspect
  *
  * Reuses the same service-account env vars as GA4:
  * GA4_SERVICE_ACCOUNT_JSON / GA4_SERVICE_ACCOUNT_PATH / GOOGLE_APPLICATION_CREDENTIALS
  *
  * Enable "Google Search Console API" and add the SA email as a user on each property.
+ * Restricted is enough for analytics + sitemaps; Owner is often required for URL Inspection.
  */
 
 export class GscError extends Error {
@@ -58,6 +61,64 @@ export type GscPageRow = {
   position: number;
 };
 
+export type GscDimensionRow = {
+  key: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
+
+export type GscSitemapEntry = {
+  path: string;
+  lastSubmitted: string | null;
+  isPending: boolean;
+  isSitemapsIndex: boolean;
+  type: string | null;
+  lastDownloaded: string | null;
+  warnings: number;
+  errors: number;
+  contents: Array<{ type: string; submitted: number; indexed: number }>;
+};
+
+export type GscUrlInspection = {
+  inspectionUrl: string;
+  indexStatusResult: {
+    verdict: string | null;
+    coverageState: string | null;
+    robotsTxtState: string | null;
+    indexingState: string | null;
+    lastCrawlTime: string | null;
+    pageFetchState: string | null;
+    googleCanonical: string | null;
+    userCanonical: string | null;
+    crawledAs: string | null;
+  };
+  mobileUsabilityResult: {
+    verdict: string | null;
+    issues: string[];
+  } | null;
+  richResultsResult: {
+    verdict: string | null;
+  } | null;
+  inspectionLink: string | null;
+};
+
+export type GscCoverage = {
+  siteUrl: string;
+  sitemaps: GscSitemapEntry[];
+  sitemapTotals: {
+    count: number;
+    withErrors: number;
+    withWarnings: number;
+    pending: number;
+    submittedUrls: number;
+    indexedUrls: number;
+  };
+  inspectedUrls: GscUrlInspection[];
+  inspectionNote: string | null;
+};
+
 export type GscSiteSummary = {
   siteUrl: string;
   rangeDays: number;
@@ -75,6 +136,9 @@ export type GscSiteSummary = {
   topPages: GscPageRow[];
   risingQueries: GscQueryRow[];
   decliningQueries: Array<GscQueryRow & { clicksDelta: number }>;
+  byDevice: GscDimensionRow[];
+  byCountry: GscDimensionRow[];
+  coverage: GscCoverage | null;
 };
 
 export function isGscConfigured() {
@@ -322,11 +386,291 @@ function mapPageRows(rows: SearchAnalyticsResponse["rows"]): GscPageRow[] {
   }));
 }
 
+function mapDimensionRows(
+  rows: SearchAnalyticsResponse["rows"],
+): GscDimensionRow[] {
+  return (rows ?? []).map((row) => ({
+    key: row.keys?.[0] || "(unknown)",
+    clicks: Number(row.clicks || 0),
+    impressions: Number(row.impressions || 0),
+    ctr: Number(row.ctr || 0),
+    position: Number(row.position || 0),
+  }));
+}
+
+type SitemapListResponse = {
+  sitemap?: Array<{
+    path?: string;
+    lastSubmitted?: string;
+    isPending?: boolean;
+    isSitemapsIndex?: boolean;
+    type?: string;
+    lastDownloaded?: string;
+    warnings?: string | number;
+    errors?: string | number;
+    contents?: Array<{
+      type?: string;
+      submitted?: string | number;
+      indexed?: string | number;
+    }>;
+  }>;
+};
+
+type UrlInspectionResponse = {
+  inspectionResult?: {
+    inspectionResultLink?: string;
+    indexStatusResult?: {
+      verdict?: string;
+      coverageState?: string;
+      robotsTxtState?: string;
+      indexingState?: string;
+      lastCrawlTime?: string;
+      pageFetchState?: string;
+      googleCanonical?: string;
+      userCanonical?: string;
+      crawledAs?: string;
+    };
+    mobileUsabilityResult?: {
+      verdict?: string;
+      issues?: Array<{ issueType?: string; severity?: string; message?: string }>;
+    };
+    richResultsResult?: {
+      verdict?: string;
+    };
+  };
+};
+
+async function gscFetchJson<T>(
+  url: string,
+  init?: RequestInit,
+): Promise<T> {
+  const token = await getAccessToken();
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      ...(init?.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const err = (await res.json()) as { error?: { message?: string } };
+      if (err.error?.message) detail = err.error.message;
+    } catch {
+      // keep statusText
+    }
+    if (res.status === 403) {
+      throw new GscError(
+        `${detail} — add the service account email as a user on this Search Console property (Owner may be required for URL Inspection), and enable the Search Console API.`,
+        403,
+      );
+    }
+    if (res.status === 404) {
+      throw new GscError(
+        `${detail} — check the lane GSC site URL matches the property exactly (sc-domain:… or https://…).`,
+        404,
+      );
+    }
+    throw new GscError(detail || "Search Console request failed", res.status);
+  }
+
+  return (await res.json()) as T;
+}
+
+/** List submitted sitemaps + error/warning counts for a property. */
+export async function listGscSitemaps(
+  siteUrlRaw: string,
+): Promise<GscSitemapEntry[]> {
+  const siteUrl = normalizeGscSiteUrl(siteUrlRaw);
+  if (!siteUrl) {
+    throw new GscError("Search Console site URL is required", 400);
+  }
+
+  const encoded = encodeURIComponent(siteUrl);
+  const data = await gscFetchJson<SitemapListResponse>(
+    `https://www.googleapis.com/webmasters/v3/sites/${encoded}/sitemaps`,
+  );
+
+  return (data.sitemap ?? []).map((entry) => ({
+    path: entry.path || "(unknown)",
+    lastSubmitted: entry.lastSubmitted ?? null,
+    isPending: Boolean(entry.isPending),
+    isSitemapsIndex: Boolean(entry.isSitemapsIndex),
+    type: entry.type ?? null,
+    lastDownloaded: entry.lastDownloaded ?? null,
+    warnings: Number(entry.warnings || 0),
+    errors: Number(entry.errors || 0),
+    contents: (entry.contents ?? []).map((c) => ({
+      type: c.type || "unknown",
+      submitted: Number(c.submitted || 0),
+      indexed: Number(c.indexed || 0),
+    })),
+  }));
+}
+
+/** Inspect one URL's Google index status (URL Inspection API). */
+export async function inspectGscUrl(
+  siteUrlRaw: string,
+  inspectionUrl: string,
+): Promise<GscUrlInspection> {
+  const siteUrl = normalizeGscSiteUrl(siteUrlRaw);
+  if (!siteUrl) {
+    throw new GscError("Search Console site URL is required", 400);
+  }
+  const url = inspectionUrl.trim();
+  if (!url || !/^https?:\/\//i.test(url)) {
+    throw new GscError("inspectionUrl must be an absolute http(s) URL", 400);
+  }
+
+  const data = await gscFetchJson<UrlInspectionResponse>(
+    "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        inspectionUrl: url,
+        siteUrl,
+        languageCode: "en-US",
+      }),
+    },
+  );
+
+  const result = data.inspectionResult;
+  const index = result?.indexStatusResult;
+  const mobile = result?.mobileUsabilityResult;
+  const rich = result?.richResultsResult;
+
+  return {
+    inspectionUrl: url,
+    indexStatusResult: {
+      verdict: index?.verdict ?? null,
+      coverageState: index?.coverageState ?? null,
+      robotsTxtState: index?.robotsTxtState ?? null,
+      indexingState: index?.indexingState ?? null,
+      lastCrawlTime: index?.lastCrawlTime ?? null,
+      pageFetchState: index?.pageFetchState ?? null,
+      googleCanonical: index?.googleCanonical ?? null,
+      userCanonical: index?.userCanonical ?? null,
+      crawledAs: index?.crawledAs ?? null,
+    },
+    mobileUsabilityResult: mobile
+      ? {
+          verdict: mobile.verdict ?? null,
+          issues: (mobile.issues ?? [])
+            .map((issue) => issue.message || issue.issueType || "")
+            .filter(Boolean),
+        }
+      : null,
+    richResultsResult: rich ? { verdict: rich.verdict ?? null } : null,
+    inspectionLink: result?.inspectionResultLink ?? null,
+  };
+}
+
+export type GscCoverageOptions = {
+  /** Extra URLs to inspect (absolute). Top pages are also sampled. */
+  inspectUrls?: string[];
+  /** How many top pages to auto-inspect (0–5). Default 3. */
+  inspectTopPages?: number;
+  topPages?: GscPageRow[];
+};
+
+/** Sitemaps health + sample URL Inspection for index coverage. */
+export async function getSearchConsoleCoverage(
+  siteUrlRaw: string,
+  options: GscCoverageOptions = {},
+): Promise<GscCoverage> {
+  const siteUrl = normalizeGscSiteUrl(siteUrlRaw);
+  if (!siteUrl) {
+    throw new GscError("Search Console site URL is required", 400);
+  }
+
+  const sitemaps = await listGscSitemaps(siteUrl);
+  let submittedUrls = 0;
+  let indexedUrls = 0;
+  for (const sitemap of sitemaps) {
+    for (const content of sitemap.contents) {
+      submittedUrls += content.submitted;
+      indexedUrls += content.indexed;
+    }
+  }
+
+  const inspectTopPages = Math.min(
+    Math.max(options.inspectTopPages ?? 3, 0),
+    5,
+  );
+  const candidates = [
+    ...(options.inspectUrls ?? []),
+    ...(options.topPages ?? [])
+      .slice(0, inspectTopPages)
+      .map((row) => row.page),
+  ]
+    .map((u) => u.trim())
+    .filter((u) => /^https?:\/\//i.test(u));
+
+  const uniqueUrls = [...new Set(candidates)].slice(0, 5);
+  const inspectedUrls: GscUrlInspection[] = [];
+  let inspectionNote: string | null = null;
+
+  for (const url of uniqueUrls) {
+    try {
+      inspectedUrls.push(await inspectGscUrl(siteUrl, url));
+    } catch (error) {
+      const message =
+        error instanceof GscError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "URL Inspection failed";
+      inspectionNote = message;
+      // Stop after first failure (often Owner permission / quota).
+      break;
+    }
+  }
+
+  if (uniqueUrls.length === 0) {
+    inspectionNote =
+      inspectionNote ??
+      "No absolute page URLs available to inspect. Pass inspectUrl or wait for top pages with https:// URLs.";
+  }
+
+  return {
+    siteUrl,
+    sitemaps,
+    sitemapTotals: {
+      count: sitemaps.length,
+      withErrors: sitemaps.filter((s) => s.errors > 0).length,
+      withWarnings: sitemaps.filter((s) => s.warnings > 0).length,
+      pending: sitemaps.filter((s) => s.isPending).length,
+      submittedUrls,
+      indexedUrls,
+    },
+    inspectedUrls,
+    inspectionNote,
+  };
+}
+
+export type GscSummaryOptions = {
+  days?: number;
+  includeCoverage?: boolean;
+  inspectUrls?: string[];
+  inspectTopPages?: number;
+};
+
 /** Summarize Search Console performance for the last N days vs prior N days. */
 export async function getSearchConsoleSummary(
   siteUrlRaw: string,
-  days = 28,
+  daysOrOptions: number | GscSummaryOptions = 28,
 ): Promise<GscSiteSummary> {
+  const options: GscSummaryOptions =
+    typeof daysOrOptions === "number"
+      ? { days: daysOrOptions }
+      : daysOrOptions;
+  const days = options.days ?? 28;
+
   const siteUrl = normalizeGscSiteUrl(siteUrlRaw);
   if (!siteUrl) {
     throw new GscError("Search Console site URL is required", 400);
@@ -350,6 +694,8 @@ export async function getSearchConsoleSummary(
     topQueriesRaw,
     topPagesRaw,
     prevQueriesRaw,
+    deviceRaw,
+    countryRaw,
   ] = await Promise.all([
     querySearchAnalytics(siteUrl, {
       startDate,
@@ -384,12 +730,26 @@ export async function getSearchConsoleSummary(
       rowLimit: 50,
       startRow: 0,
     }),
+    querySearchAnalytics(siteUrl, {
+      startDate,
+      endDate,
+      dimensions: ["device"],
+      rowLimit: 10,
+    }),
+    querySearchAnalytics(siteUrl, {
+      startDate,
+      endDate,
+      dimensions: ["country"],
+      rowLimit: 15,
+    }),
   ]);
 
   const current = sumRows(currentRaw.rows);
   const previous = sumRows(previousRaw.rows);
   const topQueries = mapQueryRows(topQueriesRaw.rows);
   const topPages = mapPageRows(topPagesRaw.rows);
+  const byDevice = mapDimensionRows(deviceRaw.rows);
+  const byCountry = mapDimensionRows(countryRaw.rows);
 
   const prevByQuery = new Map(
     mapQueryRows(prevQueriesRaw.rows).map((row) => [row.query, row]),
@@ -431,6 +791,35 @@ export async function getSearchConsoleSummary(
   }
   decliningQueries.sort((a, b) => a.clicksDelta - b.clicksDelta);
 
+  let coverage: GscCoverage | null = null;
+  if (options.includeCoverage !== false) {
+    try {
+      coverage = await getSearchConsoleCoverage(siteUrl, {
+        inspectUrls: options.inspectUrls,
+        inspectTopPages: options.inspectTopPages,
+        topPages,
+      });
+    } catch (error) {
+      // Coverage is additive — performance summary still succeeds.
+      const message =
+        error instanceof Error ? error.message : "Coverage fetch failed";
+      coverage = {
+        siteUrl,
+        sitemaps: [],
+        sitemapTotals: {
+          count: 0,
+          withErrors: 0,
+          withWarnings: 0,
+          pending: 0,
+          submittedUrls: 0,
+          indexedUrls: 0,
+        },
+        inspectedUrls: [],
+        inspectionNote: message,
+      };
+    }
+  }
+
   return {
     siteUrl,
     rangeDays,
@@ -448,5 +837,8 @@ export async function getSearchConsoleSummary(
     topPages,
     risingQueries,
     decliningQueries: decliningQueries.slice(0, 8),
+    byDevice,
+    byCountry,
+    coverage,
   };
 }
