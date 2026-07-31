@@ -312,11 +312,11 @@ Write answers to:
 ### Phase 7 — Personality & polish
 
 - Named voice, concise style pack
-- Proactive digests (“morning briefing”)
-- Memory compaction / weekly project reviews
+- Proactive digests (“morning briefing”) ✅
+- Memory compaction / weekly project reviews ✅ (`Memory/<slug>/Current.md` + `Jarvis Jobs/reviews/`)
 - Mobile-first PWA
 - Skool/community auto-publish if/when a safe API exists
-- Watchdogs for CI / deploys
+- Watchdogs for CI / deploys ✅
 
 Ship each phase usable alone. Do not wait for wake-word Jarvis before the hub is real.
 

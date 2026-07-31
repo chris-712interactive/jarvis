@@ -5,6 +5,10 @@ import {
   shouldRunEveningBriefing,
   shouldRunMorningBriefing,
 } from "@/lib/briefing/generate";
+import {
+  generateWeeklyReview,
+  shouldRunWeeklyReview,
+} from "@/lib/briefing/weekly-review";
 import { seedIfEmpty } from "@/lib/db/queries";
 import { isGmailConfigured } from "@/lib/gmail/client";
 import { authorizeCron, cronUnauthorized } from "@/lib/jobs/cron-auth";
@@ -37,7 +41,7 @@ async function step<T>(
 /**
  * Unified scheduler tick — call every 5–15 minutes from host cron.
  * Advances jobs, ingests email, queues daily content, sends briefings in-window,
- * and watches open PR CI + production deploy/health.
+ * weekly reviews on schedule, and watches open PR CI + production deploy/health.
  *
  * Each step is isolated so one failure returns JSON details instead of a bare 500.
  */
@@ -62,6 +66,9 @@ async function run(request: Request) {
   const forceBriefing =
     searchParams.get("forceBriefing") === "1" ||
     searchParams.get("forceBriefing") === "true";
+  const forceWeekly =
+    searchParams.get("forceWeekly") === "1" ||
+    searchParams.get("forceWeekly") === "true";
   const forceContent =
     searchParams.get("forceContent") === "1" ||
     searchParams.get("forceContent") === "true";
@@ -95,6 +102,16 @@ async function run(request: Request) {
     return briefings;
   });
 
+  const weeklyReviewsResult = await step("weeklyReviews", async () => {
+    if (forceWeekly) {
+      return generateWeeklyReview({ force: true });
+    }
+    if (shouldRunWeeklyReview()) {
+      return generateWeeklyReview();
+    }
+    return { skipped: true as const, reason: "outside_window" as const };
+  });
+
   const watchdogResult = skipWatchdog
     ? {
         ok: true as const,
@@ -114,6 +131,9 @@ async function run(request: Request) {
     !emailResult.ok ? `email: ${emailResult.error}` : null,
     !dailyContentResult.ok ? `dailyContent: ${dailyContentResult.error}` : null,
     !briefingsResult.ok ? `briefings: ${briefingsResult.error}` : null,
+    !weeklyReviewsResult.ok
+      ? `weeklyReviews: ${weeklyReviewsResult.error}`
+      : null,
     !watchdogResult.ok ? `watchdog: ${watchdogResult.error}` : null,
     !deployResult.ok ? `deployHealth: ${deployResult.error}` : null,
   ].filter(Boolean) as string[];
@@ -129,6 +149,9 @@ async function run(request: Request) {
     briefings: briefingsResult.ok
       ? briefingsResult.data
       : { error: briefingsResult.error },
+    weeklyReviews: weeklyReviewsResult.ok
+      ? weeklyReviewsResult.data
+      : { error: weeklyReviewsResult.error },
     watchdog: watchdogResult.ok
       ? watchdogResult.data
       : { error: watchdogResult.error },

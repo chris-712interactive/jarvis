@@ -46,6 +46,10 @@ import {
   generateBriefing,
   getLatestBriefing,
 } from "@/lib/briefing/generate";
+import {
+  generateWeeklyReview,
+  getLatestWeeklyReview,
+} from "@/lib/briefing/weekly-review";
 import { runPrWatchdog } from "@/lib/jobs/pr-watchdog";
 import {
   refreshProjectDeployStatus,
@@ -1097,6 +1101,64 @@ export function createOperatorTools(activeProjectId?: string | null) {
           note: result.skipped
             ? `Already sent ${result.kind} briefing for ${result.dayKey}. Pass force=true to regenerate.`
             : `${result.kind} briefing ready in Alerts${result.vaultPath ? ` and vault ${result.vaultPath}` : ""}.`,
+        };
+      },
+    }),
+
+    get_weekly_review: tool({
+      description:
+        "Fetch the latest weekly operator review (from Alerts). Use when the user asks what happened this week or for the weekly digest.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const latest = await getLatestWeeklyReview();
+        if (!latest) {
+          return {
+            found: false,
+            note: "No weekly review yet. Call run_weekly_review to generate one now.",
+          };
+        }
+        return { found: true, ...latest };
+      },
+    }),
+
+    run_weekly_review: tool({
+      description:
+        "Generate a weekly review now: Alerts digest + Jarvis Jobs/reviews/ notes + compacted Memory/<slug>/Current.md per vaulted lane. Pass lane/projectId to review one lane only (skips hub notification).",
+      inputSchema: z.object({
+        ...laneFields,
+        force: z
+          .boolean()
+          .optional()
+          .describe("Regenerate even if this ISO week already has a review."),
+      }),
+      execute: async ({ projectId, lane, force }) => {
+        let scopedProjectId: string | undefined;
+        if (projectId || lane) {
+          const resolved = await resolveLane({
+            projectId,
+            lane,
+            fallbackProjectId: activeProjectId,
+          });
+          if (!resolved.ok) {
+            return {
+              error: resolved.error,
+              candidates: resolved.candidates ?? null,
+            };
+          }
+          scopedProjectId = resolved.project.id;
+        }
+
+        const result = await generateWeeklyReview({
+          force: Boolean(force),
+          projectId: scopedProjectId,
+        });
+        return {
+          ...result,
+          note: result.skipped
+            ? result.reason === "already_sent"
+              ? `Weekly review for ${result.weekKey} already exists. Pass force=true to regenerate.`
+              : `Weekly review skipped (${result.reason}).`
+            : `Weekly review ${result.weekKey} ready${result.vaultPath ? ` at ${result.vaultPath}` : ""}. Per-lane Memory/<slug>/Current.md compacted where vaults exist.`,
         };
       },
     }),

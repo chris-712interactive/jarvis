@@ -104,7 +104,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
   "https://YOUR_RAILWAY_DOMAIN/api/cron/tick"
 ```
 
-Expect JSON with `jobs`, `email`, `dailyContent`, `briefings`, `watchdog`, `deployHealth`.
+Expect JSON with `jobs`, `email`, `dailyContent`, `briefings`, `weeklyReviews`, `watchdog`, `deployHealth`.
 
 ### Alternate: Nixpacks with Root Directory
 
@@ -139,6 +139,8 @@ Copy `apps/web/.env.example` → production env. Minimum useful set:
 | `BRIEFING_TZ` | Operator timezone for morning/evening windows |
 | `BRIEFING_MORNING_HOUR` | Local hour for morning briefing (default `7`) |
 | `BRIEFING_EVENING_HOUR` | Local hour for evening briefing (default `18`) |
+| `WEEKLY_REVIEW_WEEKDAY` | Local weekday for weekly review (`0`=Sun … `6`=Sat, or `monday`; default `1`) |
+| `WEEKLY_REVIEW_HOUR` | Local hour for weekly review (default `9`) |
 | `GITHUB_TOKEN` | Private repos + PR CI watchdog |
 | Gmail / GA4 vars | Optional — see `.env.example` |
 
@@ -150,8 +152,9 @@ What `/api/cron/tick` does each run:
 2. Ingest Gmail (if configured)
 3. Queue daily content drafts (idempotent per day)
 4. Generate morning/evening briefing when the local hour matches
-5. Watch open PR CI on lanes with GitHub repos (notify once on failure)
-6. Probe production URL / Vercel / Railway status on configured lanes (notify on down/degraded)
+5. Generate weekly review + memory compaction when weekday/hour matches
+6. Watch open PR CI on lanes with GitHub repos (notify once on failure)
+7. Probe production URL / Vercel / Railway status on configured lanes (notify on down/degraded)
 
 ### Deploy webhooks (near-real-time)
 
@@ -173,14 +176,16 @@ What `/api/cron/tick` does each run:
 |---|---|
 | `GET/POST /api/cron/tick` | Everything above |
 | `GET/POST /api/cron/briefing` | Force/latest briefing (`?kind=morning&force=1`, `?latest=1`) |
+| `GET/POST /api/cron/weekly-review` | Force/latest weekly review (`?force=1`, `?latest=1`, optional `?projectId=`) |
 | `GET/POST /api/cron/daily-content` | Daily Skool/content drafts only |
 | `GET/POST /api/cron/email-ingest` | Gmail ingest only |
 
-Query helpers on tick: `?forceBriefing=1`, `?forceContent=1`, `?skipWatchdog=1`, `?secret=` (same as Bearer).
+Query helpers on tick: `?forceBriefing=1`, `?forceWeekly=1`, `?forceContent=1`, `?skipWatchdog=1`, `?secret=` (same as Bearer).
 
 ## Chat tools
 
 - `get_briefing` / `run_briefing` — read or generate digests
+- `get_weekly_review` / `run_weekly_review` — weekly digest + `Memory/<slug>/Current.md` compaction
 - `check_pr_ci` — run the PR CI watchdog on demand
 - `get_lane_deploy` / `check_deploy_health` — production URL + Vercel/Railway status
 - `ingest_emails` / `draft_daily_post` — same as before

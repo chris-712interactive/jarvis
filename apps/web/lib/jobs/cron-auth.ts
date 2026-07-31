@@ -52,6 +52,7 @@ export function getLocalHourParts(
     day: "2-digit",
     hour: "2-digit",
     hour12: false,
+    weekday: "short",
   }).formatToParts(at);
 
   const lookup = (type: string) =>
@@ -61,6 +62,16 @@ export function getLocalHourParts(
   const month = Number(lookup("month"));
   const day = Number(lookup("day"));
   const hourRaw = Number(lookup("hour"));
+  const weekdayName = lookup("weekday");
+  const weekdayMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
 
   return {
     timeZone: safeZone,
@@ -69,9 +80,28 @@ export function getLocalHourParts(
     day: Number.isFinite(day) ? day : at.getUTCDate(),
     date: `${lookup("year")}-${lookup("month")}-${lookup("day")}`,
     hour: Number.isFinite(hourRaw) ? hourRaw % 24 : at.getUTCHours(),
+    /** 0 = Sunday … 6 = Saturday in the operator timezone. */
+    weekday: weekdayMap[weekdayName] ?? at.getUTCDay(),
   };
 }
 
 export function localDayKey(at: Date = new Date(), timeZone?: string) {
   return getLocalHourParts(at, timeZone ?? getOperatorTimeZone()).date;
+}
+
+/**
+ * ISO week key in the operator timezone, e.g. `2026-W31`.
+ * Uses the local calendar date, then ISO week-numbering year/week.
+ */
+export function localWeekKey(at: Date = new Date(), timeZone?: string) {
+  const parts = getLocalHourParts(at, timeZone ?? getOperatorTimeZone());
+  const utcNoon = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
+  const dayNum = utcNoon.getUTCDay() || 7; // Mon=1 … Sun=7
+  utcNoon.setUTCDate(utcNoon.getUTCDate() + 4 - dayNum);
+  const isoYear = utcNoon.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const weekNo = Math.ceil(
+    ((utcNoon.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
+  return `${isoYear}-W${String(weekNo).padStart(2, "0")}`;
 }

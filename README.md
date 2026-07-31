@@ -26,8 +26,9 @@ Project Hub + dashboard shell in `apps/web`:
 - **Search Console SEO** — `get_lane_search` + `GET /api/projects/:id/search-console` (performance, device/country, sitemaps, URL Inspection)
 - **Production deploy health** — URL probe + Vercel/Railway status, hub Live environments strip, deploy webhooks
 - **Gmail → code agents** — allowlisted senders → Cloud Agent PR → Approve & reply
-- **Scheduled tick + briefings** — `/api/cron/tick` advances jobs, email, daily content, morning/evening briefings, PR CI watchdog, and deploy health
+- **Scheduled tick + briefings** — `/api/cron/tick` advances jobs, email, daily content, morning/evening briefings, weekly reviews, PR CI watchdog, and deploy health
 - **Trust budgets** — per-lane `trustLevel` (observer → drafter → operator → autopilot) gates mutating tools, email sends, Cloud Agent PRs, and terminal job status
+- **Weekly reviews + memory compaction** — `run_weekly_review` / cron writes `Jarvis Jobs/reviews/` and compacted `Memory/<slug>/Current.md` per vaulted lane
 
 ### Chat + async jobs (Phase 2–3 + 5)
 
@@ -159,4 +160,5 @@ npm run db:seed  # seed if empty
 8. ~~Gmail → code agents → approve → reply~~
 9. ~~Cron tick + morning/evening briefings + PR CI watchdog~~
 10. ~~Trust budgets (per-lane observer → autopilot)~~
-11. PWA polish / Skool auto-publish (if/when a safe channel exists)
+11. ~~Weekly reviews + memory compaction~~
+12. PWA polish / Skool auto-publish (if/when a safe channel exists)

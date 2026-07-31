@@ -359,6 +359,33 @@ export function jobNotePath(title: string, at = new Date()) {
   return `Jarvis Jobs/${stamp}-${slug}.md`;
 }
 
+/** Weekly review note under Jarvis Jobs/reviews/ (hub rollup or per-lane). */
+export function weeklyReviewNotePath(weekKey: string, slug?: string | null) {
+  const safeWeek = weekKey.replace(/[^0-9W-]/gi, "").slice(0, 16) || "week";
+  if (slug?.trim()) {
+    const safeSlug = slug
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "lane";
+    return `Jarvis Jobs/reviews/${safeWeek}-${safeSlug}.md`;
+  }
+  return `Jarvis Jobs/reviews/${safeWeek}.md`;
+}
+
+/** Rolling compacted memory note per lane (supersedes dumping job history into chat). */
+export function compactedMemoryNotePath(slug?: string | null) {
+  if (slug?.trim()) {
+    const safeSlug = slug
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "lane";
+    return `Memory/${safeSlug}/Current.md`;
+  }
+  return "Memory/Current.md";
+}
+
 /** Daily / channel content drafts under Content/<channel>/. */
 export function contentNotePath(
   channel: string | null | undefined,

@@ -67,6 +67,7 @@ export function canUseMutatingTool(
     "get_lane_search",
     "get_lane_deploy",
     "get_briefing",
+    "get_weekly_review",
     "check_pr_ci",
     "check_deploy_health",
   ]);
@@ -87,6 +88,7 @@ export function canUseMutatingTool(
     "draft_daily_post",
     "ingest_emails",
     "run_briefing",
+    "run_weekly_review",
     "clear_needs_you",
     "resolve_job",
   ]);
