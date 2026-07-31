@@ -15,6 +15,10 @@ import {
   isTerminalRunStatus,
 } from "@/lib/cursor/agents";
 import { getRepoSummary, parseGithubRepoUrl } from "@/lib/github/repo";
+import {
+  buildCodeAgentRequirements,
+  looksLikeCodeIntent,
+} from "@/lib/jobs/job-intent";
 
 /** Keep vault jobs visible in "In flight" long enough to notice. */
 const MIN_RUNNING_MS = 8000;
@@ -163,8 +167,16 @@ function autoCreatePr() {
   return true;
 }
 
-function agentMode(): "agent" | "plan" {
+function agentMode(job?: Pick<Job, "title" | "brief">): "agent" | "plan" {
   const raw = process.env.CURSOR_AGENT_MODE?.trim().toLowerCase();
+  // Implementation briefs must not run in plan mode (that yields docs-only PRs).
+  if (
+    job &&
+    looksLikeCodeIntent(`${job.title}\n${job.brief}`) &&
+    raw === "plan"
+  ) {
+    return "agent";
+  }
   return raw === "plan" ? "plan" : "agent";
 }
 
@@ -181,6 +193,7 @@ async function resolveStartingRef(repoUrl: string) {
 }
 
 function buildAgentPrompt(job: Job, project: Project) {
+  const requirements = buildCodeAgentRequirements(job.title, job.brief);
   return [
     `You are working as a coding agent for the Jarvis command center.`,
     `Lane: ${project.name}`,
@@ -191,11 +204,7 @@ function buildAgentPrompt(job: Job, project: Project) {
     "Mission brief:",
     job.brief.trim() || job.title,
     "",
-    "Requirements:",
-    "- Implement the requested work in this repository.",
-    "- Prefer a focused, reviewable change set.",
-    "- Open or update a pull request when done if enabled.",
-    "- Do not invent requirements beyond the brief; ask via PR description if ambiguous.",
+    ...requirements,
   ]
     .filter(Boolean)
     .join("\n");
@@ -267,7 +276,7 @@ async function launchCodeAgent(job: Job) {
       repoUrl: parsed.url,
       startingRef,
       autoCreatePR: autoCreatePr(),
-      mode: agentMode(),
+      mode: agentMode(job),
       modelId: process.env.CURSOR_AGENT_MODEL?.trim() || undefined,
     });
 

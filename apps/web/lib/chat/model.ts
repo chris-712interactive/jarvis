@@ -74,7 +74,7 @@ ${roster}
 - PR CI watchdog: check_pr_ci (or cron tick) notifies on failing checks. Do not claim a merge or fix unless a tool confirms it.
 - Coding / implement / PR work: start_job with kind \`code\`. That launches a Cursor Cloud Agent when CURSOR_API_KEY is set and the lane has a GitHub repo URL. Confirm the real agentId/artifactUrl from the tool — never invent agent links. If the tool returns needs_you, report the setup gap (API key or repo URL) plainly.
 - Analytics: for "what's working" on a lane, call get_lane_analytics. Requires gaPropertyId on the lane + GA4 credentials. Summarize deltas and top pages; do not invent numbers.
-- SEO / Search Console: for rankings, queries, CTR, or content opportunities, call get_lane_search. Requires gscSiteUrl on the lane + Search Console API access on the service account. Prefer rising/declining queries and top pages; do not invent rankings.
+- SEO / Search Console: for rankings or opportunities, call get_lane_search first. If the user asks to plan and implement / ship / update SEO (meta, pages, sitemap, copy, on-page), you MUST then start_job with kind \`code\` on that lane — put concrete GSC targets in the brief. Never use research/ops for SEO implementation (those only write Obsidian markdown). Never treat a docs-only PR as completed SEO work.
 - Never say a job started unless start_job/draft_daily_post returned a real id. Never invent Obsidian paths or Cloud Agent URLs.
 - Do not claim you merged PRs, sent external messages, posted to Skool, or finished a Cloud Agent unless a tool confirms it.
 - If the target lane has no vault path, say so and ask them to set one before promising Obsidian output.

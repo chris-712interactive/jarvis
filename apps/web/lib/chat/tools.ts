@@ -39,6 +39,10 @@ import {
 } from "@/lib/analytics/gsc";
 import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
 import {
+  enrichCodeBriefWithGsc,
+  resolveJobKind,
+} from "@/lib/jobs/job-intent";
+import {
   generateBriefing,
   getLatestBriefing,
 } from "@/lib/briefing/generate";
@@ -421,19 +425,21 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     start_job: tool({
       description:
-        "Start an async background job for a project lane. When the user names a lane, pass it as `lane` — do not rely on the UI dropdown. Prefer this for research, ops, drafts, and coding missions. Use kind `code` for implement/PR work — that launches a Cursor Cloud Agent when CURSOR_API_KEY and a GitHub repo URL are set.",
+        "Start an async background job for a project lane. When the user names a lane, pass it as `lane` — do not rely on the UI dropdown. Use kind `code` for implement/fix/PR/SEO site updates — that launches a Cursor Cloud Agent when CURSOR_API_KEY and a GitHub repo URL are set. kind `research`/`ops` only write Obsidian markdown notes (never site changes). For \"plan and implement SEO\", use kind `code` and put the plan + Search Console highlights in the brief.",
       inputSchema: z.object({
         title: z.string().min(1).max(200).describe("Short job title"),
         brief: z
           .string()
           .min(1)
           .max(8000)
-          .describe("What the worker should accomplish"),
+          .describe(
+            "What the worker should accomplish. For SEO code jobs, include concrete on-site targets (pages/meta/queries) from get_lane_search — not a docs-only plan.",
+          ),
         kind: z
           .enum(jobKinds)
           .optional()
           .describe(
-            "code (Cloud Agent) | research | ops | message. Defaults to ops. Prefer code for implement/fix/PR work.",
+            "code (Cloud Agent PR) | research | ops | message. Defaults to ops. MUST be code for implement/fix/PR/SEO site updates. research/ops = vault notes only.",
           ),
         ...laneFields,
         interruptLevel: z
@@ -462,11 +468,24 @@ export function createOperatorTools(activeProjectId?: string | null) {
         }
         const project = resolved.project;
 
+        const resolvedKind = resolveJobKind({ kind, title, brief });
+        let finalBrief = brief;
+        let gscEnriched = false;
+        if (resolvedKind.kind === "code") {
+          const enriched = await enrichCodeBriefWithGsc({
+            project,
+            title,
+            brief,
+          });
+          finalBrief = enriched.brief;
+          gscEnriched = enriched.enriched;
+        }
+
         const job = await createJob({
           projectId: project.id,
           title,
-          brief,
-          kind: kind ?? "ops",
+          brief: finalBrief,
+          kind: resolvedKind.kind,
           status: "queued",
           summary: "Queued for background worker.",
           interruptLevel: interruptLevel ?? project.interruptLevel ?? "digest",
@@ -490,6 +509,13 @@ export function createOperatorTools(activeProjectId?: string | null) {
         return {
           started: true,
           matchedBy: resolved.matchedBy,
+          kindResolved: {
+            requested: kind ?? "ops",
+            final: resolvedKind.kind,
+            coerced: resolvedKind.coerced,
+            reason: resolvedKind.reason,
+            gscEnriched,
+          },
           job: {
             id: active.id,
             title: active.title,
@@ -872,7 +898,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             projectName: project.name,
             gscSiteUrl: project.gscSiteUrl,
             summary,
-            note: "Use rising/declining queries + top pages for SEO priorities. Do not invent rankings beyond this data.",
+            note: "Use rising/declining queries + top pages for SEO priorities. Do not invent rankings beyond this data. If the user asked to implement/ship SEO updates, follow up with start_job kind=code (not research/ops) and put these targets in the brief.",
           };
         } catch (error) {
           return { error: gscErrorMessage(error) };
