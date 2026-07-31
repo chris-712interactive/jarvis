@@ -11,6 +11,8 @@ import {
   DEFAULT_WAKE_WORD,
   SPEAK_REPLIES_STORAGE_KEY,
   WAKE_WORD_STORAGE_KEY,
+  loadSpeechVoices,
+  primeSpeechSynthesis,
   sanitizeVoiceCommand,
   speakText,
   stopSpeaking,
@@ -21,7 +23,18 @@ import type { Project } from "@/lib/db/schema";
 function messageText(message: UIMessage) {
   return message.parts
     .map((part) => {
-      if (part.type === "text") return part.text;
+      if (part.type === "text" && "text" in part) {
+        return String((part as { text?: string }).text ?? "");
+      }
+      // Some SDK builds expose plain content strings on parts.
+      if (
+        part &&
+        typeof part === "object" &&
+        "text" in part &&
+        typeof (part as { text?: unknown }).text === "string"
+      ) {
+        return (part as { text: string }).text;
+      }
       return "";
     })
     .filter(Boolean)
@@ -143,6 +156,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     setOpen(true);
     setInput("");
     clearErrorRef.current();
+    primeSpeechSynthesis();
     stopSpeaking();
     try {
       await sendMessageRef.current({ text: trimmed });
@@ -207,7 +221,15 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
       // ignore storage failures
     }
     setHydrated(true);
+    // Warm Chrome voices list early (async).
+    void loadSpeechVoices();
   }, []);
+
+  // When the uplink opens, prime synthesis on that user gesture.
+  useEffect(() => {
+    if (!open || !hydrated) return;
+    primeSpeechSynthesis();
+  }, [open, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -341,7 +363,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
   // Speak assistant replies (typed or voice) when Speak is on.
   useEffect(() => {
     if (status !== "ready") return;
-    if (!speakRepliesRef.current) {
+    if (!speakReplies) {
       voiceOriginRef.current = false;
       return;
     }
@@ -356,7 +378,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
 
     const text = textForSpeech(messageText(lastAssistant));
     if (!text) {
-      voiceOriginRef.current = false;
+      // Tool-only assistant turn — wait for text parts to arrive on a later update.
       return;
     }
 
@@ -364,15 +386,18 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     voiceOriginRef.current = false;
     setSpeaking(true);
     void speakText(text)
-      .catch(() => undefined)
+      .catch((err) => {
+        console.error("[uplink] speak failed", err);
+      })
       .finally(() => setSpeaking(false));
-  }, [status, messages]);
+  }, [status, messages, speakReplies]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     const text = input.trim();
     if (!text || busy || configured !== true) return;
     voiceOriginRef.current = false;
+    primeSpeechSynthesis();
     stopMic({ send: false });
     stopSpeaking();
     setSpeaking(false);
@@ -420,7 +445,13 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
 
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() =>
+          setOpen((value) => {
+            const next = !value;
+            if (next) primeSpeechSynthesis();
+            return next;
+          })
+        }
         className="fixed bottom-5 right-5 z-40 btn-primary !px-4 !py-3 shadow-[0_0_24px_color-mix(in_oklab,var(--beam)_35%,transparent)]"
       >
         {open ? "Close uplink" : "Open uplink"}
@@ -474,6 +505,8 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                   if (!next) {
                     stopSpeaking();
                     setSpeaking(false);
+                  } else {
+                    primeSpeechSynthesis();
                   }
                   return next;
                 });
