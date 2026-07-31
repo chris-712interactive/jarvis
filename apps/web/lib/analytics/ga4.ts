@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Lightweight GA4 Data API client (REST + service-account JWT).
@@ -58,6 +59,13 @@ export function isGa4Configured() {
   );
 }
 
+function resolveCredentialsPath(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (path.isAbsolute(trimmed)) return trimmed;
+  return path.resolve(process.cwd(), trimmed);
+}
+
 function loadCredentials(): ServiceAccount {
   const inline = process.env.GA4_SERVICE_ACCOUNT_JSON?.trim();
   if (inline) {
@@ -68,21 +76,25 @@ function loadCredentials(): ServiceAccount {
     }
   }
 
-  const filePath =
+  const filePathRaw =
     process.env.GA4_SERVICE_ACCOUNT_PATH?.trim() ||
     process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
-  if (filePath) {
+  if (filePathRaw) {
+    const filePath = resolveCredentialsPath(filePathRaw);
     try {
-      return JSON.parse(fs.readFileSync(filePath, "utf8")) as ServiceAccount;
+      return JSON.parse(fs.readFileSync(filePath!, "utf8")) as ServiceAccount;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not read credentials file";
-      throw new Ga4Error(`GA4 credentials file unreadable: ${message}`, 500);
+      throw new Ga4Error(
+        `GA4 credentials file unreadable at ${filePath}: ${message}. On Railway, paste the JSON into GA4_SERVICE_ACCOUNT_JSON instead — local paths like ./lib/google/sa.json are not in the Docker image.`,
+        500,
+      );
     }
   }
 
   throw new Ga4Error(
-    "GA4 credentials missing. Set GA4_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS, and grant the service account Viewer on the GA4 property.",
+    "GA4 credentials missing. Set Railway Variable GA4_SERVICE_ACCOUNT_JSON to the full service-account JSON key (preferred on Railway), or use a local GOOGLE_APPLICATION_CREDENTIALS path for development only.",
     503,
   );
 }

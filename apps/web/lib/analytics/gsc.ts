@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Google Search Console (REST + service-account JWT).
@@ -150,6 +151,14 @@ export function isGscConfigured() {
   );
 }
 
+function resolveCredentialsPath(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (path.isAbsolute(trimmed)) return trimmed;
+  // Relative paths are from process.cwd() (apps/web locally; /app on Railway).
+  return path.resolve(process.cwd(), trimmed);
+}
+
 function loadCredentials(): ServiceAccount {
   const inline =
     process.env.GSC_SERVICE_ACCOUNT_JSON?.trim() ||
@@ -162,21 +171,25 @@ function loadCredentials(): ServiceAccount {
     }
   }
 
-  const filePath =
+  const filePathRaw =
     process.env.GA4_SERVICE_ACCOUNT_PATH?.trim() ||
     process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
-  if (filePath) {
+  if (filePathRaw) {
+    const filePath = resolveCredentialsPath(filePathRaw);
     try {
-      return JSON.parse(fs.readFileSync(filePath, "utf8")) as ServiceAccount;
+      return JSON.parse(fs.readFileSync(filePath!, "utf8")) as ServiceAccount;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not read credentials file";
-      throw new GscError(`GSC credentials file unreadable: ${message}`, 500);
+      throw new GscError(
+        `GSC credentials file unreadable at ${filePath}: ${message}. On Railway, paste the JSON into GA4_SERVICE_ACCOUNT_JSON instead — ./lib/google/sa.json is gitignored and is not in the Docker image.`,
+        500,
+      );
     }
   }
 
   throw new GscError(
-    "Search Console credentials missing on the server. Set Railway Variable GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) to the full service-account JSON key file contents, then redeploy.",
+    "Search Console credentials missing on the server. Set Railway Variable GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) to the full service-account JSON key file contents, then redeploy. A local GOOGLE_APPLICATION_CREDENTIALS path like ./lib/google/sa.json will not work on Railway.",
     503,
   );
 }
