@@ -50,7 +50,7 @@ One replica only — SQLite does not like multiple writers.
 | `BRIEFING_TZ` | recommended | IANA timezone, e.g. `America/Chicago` (not `CST`) |
 | `CURSOR_API_KEY` | for code jobs | Cursor Dashboard → API Keys |
 | `GITHUB_TOKEN` | recommended | private repos + PR CI watchdog |
-| Gmail / GA4 | optional | see `apps/web/.env.example` |
+| Gmail / GA4 / GSC | optional | see `apps/web/.env.example` (Search Console reuses the GA4 service account) |
 
 Also set if you use Gmail after deploy:
 
