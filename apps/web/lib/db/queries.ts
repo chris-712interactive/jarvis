@@ -57,6 +57,7 @@ export type CreateProjectInput = {
   vaultPath?: string | null;
   needsYou?: string | null;
   gaPropertyId?: string | null;
+  gscSiteUrl?: string | null;
   contentChannel?: string | null;
   contentBrief?: string;
   dailyContent?: boolean;
@@ -84,6 +85,7 @@ export async function createProject(input: CreateProjectInput) {
     vaultPath: input.vaultPath?.trim() || null,
     needsYou: input.needsYou?.trim() || null,
     gaPropertyId: input.gaPropertyId?.trim() || null,
+    gscSiteUrl: input.gscSiteUrl?.trim() || null,
     contentChannel: input.contentChannel?.trim() || null,
     contentBrief: input.contentBrief?.trim() ?? "",
     dailyContent: Boolean(input.dailyContent),
@@ -125,6 +127,10 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
       input.gaPropertyId !== undefined
         ? input.gaPropertyId?.trim() || null
         : existing.gaPropertyId,
+    gscSiteUrl:
+      input.gscSiteUrl !== undefined
+        ? input.gscSiteUrl?.trim() || null
+        : existing.gscSiteUrl,
     contentChannel:
       input.contentChannel !== undefined
         ? input.contentChannel?.trim() || null

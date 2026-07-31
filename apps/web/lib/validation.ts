@@ -51,6 +51,7 @@ export const createProjectSchema = z.object({
   vaultPath: optionalText,
   needsYou: optionalText,
   gaPropertyId: optionalText,
+  gscSiteUrl: optionalText,
   contentChannel: optionalText,
   contentBrief: z.string().trim().max(4000).optional().default(""),
   dailyContent: optionalBool,

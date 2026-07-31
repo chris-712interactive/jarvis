@@ -29,6 +29,7 @@ export const projects = sqliteTable("projects", {
   vaultPath: text("vault_path"),
   needsYou: text("needs_you"),
   gaPropertyId: text("ga_property_id"),
+  gscSiteUrl: text("gsc_site_url"),
   contentChannel: text("content_channel"),
   contentBrief: text("content_brief").notNull().default(""),
   dailyContent: integer("daily_content", { mode: "boolean" })

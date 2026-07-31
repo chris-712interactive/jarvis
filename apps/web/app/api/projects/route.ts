@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     vaultPath: parsed.data.vaultPath ?? null,
     needsYou: parsed.data.needsYou ?? null,
     gaPropertyId: parsed.data.gaPropertyId ?? null,
+    gscSiteUrl: parsed.data.gscSiteUrl ?? null,
     contentChannel: parsed.data.contentChannel ?? null,
     contentBrief: parsed.data.contentBrief ?? "",
     dailyContent: parsed.data.dailyContent ?? false,

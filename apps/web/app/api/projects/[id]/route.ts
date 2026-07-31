@@ -39,6 +39,7 @@ export async function PATCH(request: Request, { params }: Params) {
     vaultPath: parsed.data.vaultPath,
     needsYou: parsed.data.needsYou,
     gaPropertyId: parsed.data.gaPropertyId,
+    gscSiteUrl: parsed.data.gscSiteUrl,
     contentChannel: parsed.data.contentChannel,
     contentBrief: parsed.data.contentBrief,
     dailyContent: parsed.data.dailyContent,

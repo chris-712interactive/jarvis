@@ -71,6 +71,11 @@ export default async function ProjectDetailPage({ params }: Params) {
                   ga4 // {project.gaPropertyId}
                 </p>
               ) : null}
+              {project.gscSiteUrl ? (
+                <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
+                  gsc // {project.gscSiteUrl}
+                </p>
+              ) : null}
               {project.contentChannel || project.dailyContent ? (
                 <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
                   content // {project.contentChannel || "channel"}
@@ -149,6 +154,7 @@ export default async function ProjectDetailPage({ params }: Params) {
                   vaultPath: project.vaultPath ?? "",
                   needsYou: project.needsYou ?? "",
                   gaPropertyId: project.gaPropertyId ?? "",
+                  gscSiteUrl: project.gscSiteUrl ?? "",
                   contentChannel: project.contentChannel ?? "",
                   contentBrief: project.contentBrief ?? "",
                   dailyContent: Boolean(project.dailyContent),

@@ -75,6 +75,9 @@ function migrateSchema(sqlite: DatabaseSync) {
   if (!projectCols.some((column) => column.name === "ga_property_id")) {
     sqlite.exec(`ALTER TABLE projects ADD COLUMN ga_property_id TEXT`);
   }
+  if (!projectCols.some((column) => column.name === "gsc_site_url")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN gsc_site_url TEXT`);
+  }
   if (!projectCols.some((column) => column.name === "content_channel")) {
     sqlite.exec(`ALTER TABLE projects ADD COLUMN content_channel TEXT`);
   }
@@ -159,6 +162,7 @@ function createSqlite() {
       vault_path TEXT,
       needs_you TEXT,
       ga_property_id TEXT,
+      gsc_site_url TEXT,
       content_channel TEXT,
       content_brief TEXT NOT NULL DEFAULT '',
       daily_content INTEGER NOT NULL DEFAULT 0,

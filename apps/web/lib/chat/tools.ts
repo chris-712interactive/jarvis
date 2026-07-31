@@ -32,6 +32,11 @@ import {
   getPropertySummary,
   isGa4Configured,
 } from "@/lib/analytics/ga4";
+import {
+  GscError,
+  getSearchConsoleSummary,
+  isGscConfigured,
+} from "@/lib/analytics/gsc";
 import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
 import {
   generateBriefing,
@@ -56,6 +61,12 @@ function ga4ErrorMessage(error: unknown) {
   if (error instanceof Ga4Error) return error.message;
   if (error instanceof Error) return error.message;
   return "GA4 request failed";
+}
+
+function gscErrorMessage(error: unknown) {
+  if (error instanceof GscError) return error.message;
+  if (error instanceof Error) return error.message;
+  return "Search Console request failed";
 }
 
 const laneFields = {
@@ -134,6 +145,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             repoUrl: p.repoUrl,
             vaultPath: p.vaultPath,
             gaPropertyId: p.gaPropertyId,
+            gscSiteUrl: p.gscSiteUrl,
             contentChannel: p.contentChannel,
             dailyContent: p.dailyContent,
             emailSenders: p.emailSenders,
@@ -200,6 +212,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             repoUrl: project.repoUrl,
             vaultPath: project.vaultPath,
             gaPropertyId: project.gaPropertyId,
+            gscSiteUrl: project.gscSiteUrl,
             contentChannel: project.contentChannel,
             contentBrief: project.contentBrief,
             dailyContent: project.dailyContent,
@@ -807,6 +820,62 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         } catch (error) {
           return { error: ga4ErrorMessage(error) };
+        }
+      },
+    }),
+
+    get_lane_search: tool({
+      description:
+        "Deep-dive Google Search Console SEO for a lane: clicks, impressions, CTR, average position, top queries/pages, rising and declining queries. Requires gscSiteUrl on the lane plus the shared Google service-account credentials (Search Console API enabled).",
+      inputSchema: z.object({
+        ...laneFields,
+        days: z
+          .number()
+          .int()
+          .min(1)
+          .max(90)
+          .optional()
+          .describe("Lookback days. Defaults to 28."),
+      }),
+      execute: async ({ projectId, lane, days }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
+        if (!project.gscSiteUrl) {
+          return {
+            error: `Lane "${project.name}" has no Search Console site. Set gscSiteUrl (sc-domain:example.com or https://example.com/) on the project edit form.`,
+          };
+        }
+        if (!isGscConfigured()) {
+          return {
+            error:
+              "Search Console credentials missing. Set GA4_SERVICE_ACCOUNT_JSON (or GSC_SERVICE_ACCOUNT_JSON) / GOOGLE_APPLICATION_CREDENTIALS, enable Search Console API, and add the service account as a user on the property.",
+          };
+        }
+        try {
+          const summary = await getSearchConsoleSummary(
+            project.gscSiteUrl,
+            days ?? 28,
+          );
+          return {
+            matchedBy: resolved.matchedBy,
+            projectId: project.id,
+            projectName: project.name,
+            gscSiteUrl: project.gscSiteUrl,
+            summary,
+            note: "Use rising/declining queries + top pages for SEO priorities. Do not invent rankings beyond this data.",
+          };
+        } catch (error) {
+          return { error: gscErrorMessage(error) };
         }
       },
     }),

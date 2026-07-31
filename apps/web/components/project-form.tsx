@@ -24,6 +24,7 @@ export function ProjectForm({
     vaultPath: string;
     needsYou: string;
     gaPropertyId: string;
+    gscSiteUrl: string;
     contentChannel: string;
     contentBrief: string;
     dailyContent: boolean;
@@ -50,6 +51,7 @@ export function ProjectForm({
       vaultPath: String(form.get("vaultPath") ?? "") || null,
       needsYou: String(form.get("needsYou") ?? "") || null,
       gaPropertyId: String(form.get("gaPropertyId") ?? "") || null,
+      gscSiteUrl: String(form.get("gscSiteUrl") ?? "") || null,
       contentChannel: String(form.get("contentChannel") ?? "") || null,
       contentBrief: String(form.get("contentBrief") ?? ""),
       dailyContent: String(form.get("dailyContent") ?? "false") === "true",
@@ -164,6 +166,16 @@ export function ProjectForm({
           defaultValue={initial?.gaPropertyId}
           className={fieldClass}
           placeholder="123456789"
+        />
+      </Field>
+
+      <Field label="Search Console site" htmlFor="gscSiteUrl">
+        <input
+          id="gscSiteUrl"
+          name="gscSiteUrl"
+          defaultValue={initial?.gscSiteUrl}
+          className={fieldClass}
+          placeholder="sc-domain:example.com or https://example.com/"
         />
       </Field>
 

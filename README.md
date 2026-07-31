@@ -23,6 +23,7 @@ Project Hub + dashboard shell in `apps/web`:
 - **Phase 5 coding workers** — `kind: code` jobs launch Cursor Cloud Agents (`CURSOR_API_KEY`)
 - **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; approve-before-post
 - **GA4 lane analytics** — `get_lane_analytics` + `GET /api/projects/:id/analytics`
+- **Search Console SEO** — `get_lane_search` + `GET /api/projects/:id/search-console`
 - **Gmail → code agents** — allowlisted senders → Cloud Agent PR → Approve & reply
 - **Scheduled tick + briefings** — `/api/cron/tick` advances jobs, email, daily content, morning/evening briefings, and PR CI watchdog
 
@@ -44,6 +45,7 @@ Operator tools:
 - Obsidian list, search, read, write for the active lane
 - GitHub `get_repo_summary` / `list_open_prs` for lanes with a repo URL
 - GA4 `get_lane_analytics` for lanes with a property id
+- Search Console `get_lane_search` for lanes with a GSC site URL
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
 - `research` / `ops` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
@@ -89,6 +91,15 @@ See [docs/DEPLOY.md](docs/DEPLOY.md). Short version:
 3. Set `GA4_SERVICE_ACCOUNT_JSON` (or `GOOGLE_APPLICATION_CREDENTIALS` / `GA4_SERVICE_ACCOUNT_PATH`) in `.env.local`
 4. Put the numeric **GA4 property ID** on the lane
 5. Ask “what’s working on Carline Dad Codes?” or call `GET /api/projects/:id/analytics?days=7`
+
+### Google Search Console (per lane)
+
+1. On the same GCP project, enable **Google Search Console API**
+2. In Search Console → Users, add the service account email to each site/domain property
+3. Reuse `GA4_SERVICE_ACCOUNT_JSON` (or set `GSC_SERVICE_ACCOUNT_JSON`)
+4. On the lane, set **Search Console site** to `sc-domain:example.com` or `https://example.com/`
+5. Ask “SEO deep dive for ForgeRep” / “top queries last 28 days” — uplink calls `get_lane_search`
+6. Or `GET /api/projects/:id/search-console?days=28`
 
 Chat can also call `write_vault_note` for short immediate writes (`POST /api/projects/:id/notes/write`).
 
