@@ -18,6 +18,29 @@ export type JobKind = (typeof jobKinds)[number];
 export const interruptLevels = ["silent", "digest", "nudge", "interrupt"] as const;
 export type InterruptLevel = (typeof interruptLevels)[number];
 
+/** Per-lane trust budget (PRODUCT.md trust ladder). Default operator. */
+export const trustLevels = [
+  "observer",
+  "drafter",
+  "operator",
+  "autopilot",
+] as const;
+export type TrustLevel = (typeof trustLevels)[number];
+
+/** Where production is hosted — drives which status APIs we call. */
+export const deployHosts = ["url", "vercel", "railway", "aws"] as const;
+export type DeployHost = (typeof deployHosts)[number];
+
+/** Cached production health/deploy state (updated by cron + on-demand checks). */
+export const deployStatuses = [
+  "ok",
+  "building",
+  "degraded",
+  "down",
+  "unknown",
+] as const;
+export type DeployStatus = (typeof deployStatuses)[number];
+
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -30,6 +53,15 @@ export const projects = sqliteTable("projects", {
   needsYou: text("needs_you"),
   gaPropertyId: text("ga_property_id"),
   gscSiteUrl: text("gsc_site_url"),
+  productionUrl: text("production_url"),
+  deployHost: text("deploy_host").$type<DeployHost | null>(),
+  deployProjectId: text("deploy_project_id"),
+  deployStatus: text("deploy_status")
+    .$type<DeployStatus>()
+    .notNull()
+    .default("unknown"),
+  deployStatusDetail: text("deploy_status_detail").notNull().default(""),
+  deployCheckedAt: integer("deploy_checked_at", { mode: "timestamp_ms" }),
   contentChannel: text("content_channel"),
   contentBrief: text("content_brief").notNull().default(""),
   dailyContent: integer("daily_content", { mode: "boolean" })
@@ -40,6 +72,10 @@ export const projects = sqliteTable("projects", {
     .$type<InterruptLevel>()
     .notNull()
     .default("digest"),
+  trustLevel: text("trust_level")
+    .$type<TrustLevel>()
+    .notNull()
+    .default("operator"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });

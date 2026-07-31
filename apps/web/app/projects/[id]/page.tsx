@@ -4,6 +4,8 @@ import { SiteHeader } from "@/components/site-header";
 import { ProjectForm } from "@/components/project-form";
 import { VaultNotesPanel } from "@/components/vault-notes-panel";
 import { getProject, listJobs, seedIfEmpty } from "@/lib/db/queries";
+import { isLaneDeployConfigured } from "@/lib/deploy/status";
+import { refreshProjectDeployStatus } from "@/lib/jobs/deploy-watchdog";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,8 +15,22 @@ type Params = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: Params) {
   await seedIfEmpty();
   const { id } = await params;
-  const project = await getProject(id);
+  let project = await getProject(id);
   if (!project) notFound();
+
+  // Refresh once when status was never checked or is still unknown so the
+  // lane page shows a real probe (and missing-token hints) without waiting on cron.
+  if (
+    isLaneDeployConfigured(project) &&
+    (!project.deployCheckedAt || project.deployStatus === "unknown")
+  ) {
+    try {
+      await refreshProjectDeployStatus(project);
+      project = (await getProject(id)) ?? project;
+    } catch (error) {
+      console.warn("[project] deploy refresh failed", error);
+    }
+  }
 
   const projectJobs = await listJobs({ projectId: project.id });
 
@@ -33,7 +49,8 @@ export default async function ProjectDetailPage({ params }: Params) {
           <div className="space-y-8">
             <section className="hud-frame px-5 py-6 sm:px-6">
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-beam">
-                {project.status} {"//"} {project.interruptLevel}
+                {project.status} {"//"} {project.interruptLevel} {"//"} trust{" "}
+                {project.trustLevel}
               </p>
               <h1 className="mt-3 font-[family-name:var(--font-display)] text-4xl font-extrabold tracking-tight sm:text-5xl">
                 {project.name}
@@ -74,6 +91,60 @@ export default async function ProjectDetailPage({ params }: Params) {
               {project.gscSiteUrl ? (
                 <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
                   gsc // {project.gscSiteUrl}
+                </p>
+              ) : null}
+              {project.productionUrl || project.deployHost ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <span
+                    className={`inline-flex items-center gap-2 border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] ${
+                      project.deployStatus === "ok"
+                        ? "border-flight/40 text-flight"
+                        : project.deployStatus === "building"
+                          ? "border-beam/40 text-beam"
+                          : project.deployStatus === "down" ||
+                              project.deployStatus === "degraded"
+                            ? "border-signal/50 text-signal"
+                            : "border-ink-soft/30 text-ink-soft"
+                    }`}
+                  >
+                    <span
+                      className={`live-dot ${
+                        project.deployStatus === "ok"
+                          ? "bg-flight"
+                          : project.deployStatus === "building"
+                            ? "bg-beam"
+                            : project.deployStatus === "down" ||
+                                project.deployStatus === "degraded"
+                              ? "bg-signal"
+                              : "bg-ink-soft/40"
+                      } ${
+                        project.deployStatus === "ok" ||
+                        project.deployStatus === "building"
+                          ? "lane-pulse"
+                          : ""
+                      }`}
+                    />
+                    prod // {project.deployStatus || "unknown"}
+                    {project.deployHost ? ` · ${project.deployHost}` : ""}
+                  </span>
+                  {project.productionUrl ? (
+                    <a
+                      href={project.productionUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[11px] text-beam underline decoration-beam/40 underline-offset-4 hover:decoration-beam"
+                    >
+                      {project.productionUrl}
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+              {project.deployStatusDetail ? (
+                <p className="mt-2 max-w-2xl font-mono text-[11px] leading-relaxed text-ink-soft">
+                  {project.deployStatusDetail}
+                  {project.deployCheckedAt
+                    ? ` · checked ${project.deployCheckedAt.toISOString()}`
+                    : ""}
                 </p>
               ) : null}
               {project.contentChannel || project.dailyContent ? (
@@ -155,11 +226,20 @@ export default async function ProjectDetailPage({ params }: Params) {
                   needsYou: project.needsYou ?? "",
                   gaPropertyId: project.gaPropertyId ?? "",
                   gscSiteUrl: project.gscSiteUrl ?? "",
+                  productionUrl: project.productionUrl ?? "",
+                  deployHost: (project.deployHost ?? "") as
+                    | ""
+                    | "url"
+                    | "vercel"
+                    | "railway"
+                    | "aws",
+                  deployProjectId: project.deployProjectId ?? "",
                   contentChannel: project.contentChannel ?? "",
                   contentBrief: project.contentBrief ?? "",
                   dailyContent: Boolean(project.dailyContent),
                   emailSenders: project.emailSenders ?? "",
                   interruptLevel: project.interruptLevel,
+                  trustLevel: project.trustLevel,
                 }}
               />
             </div>

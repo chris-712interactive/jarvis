@@ -5,6 +5,8 @@ import { useState, type FormEvent } from "react";
 
 const statuses = ["active", "paused", "archived"] as const;
 const interrupts = ["silent", "digest", "nudge", "interrupt"] as const;
+const trustLevels = ["observer", "drafter", "operator", "autopilot"] as const;
+const deployHosts = ["url", "vercel", "railway", "aws"] as const;
 
 const fieldClass = "field";
 
@@ -25,11 +27,15 @@ export function ProjectForm({
     needsYou: string;
     gaPropertyId: string;
     gscSiteUrl: string;
+    productionUrl: string;
+    deployHost: "" | (typeof deployHosts)[number];
+    deployProjectId: string;
     contentChannel: string;
     contentBrief: string;
     dailyContent: boolean;
     emailSenders: string;
     interruptLevel: (typeof interrupts)[number];
+    trustLevel: (typeof trustLevels)[number];
   };
 }) {
   const router = useRouter();
@@ -52,11 +58,15 @@ export function ProjectForm({
       needsYou: String(form.get("needsYou") ?? "") || null,
       gaPropertyId: String(form.get("gaPropertyId") ?? "") || null,
       gscSiteUrl: String(form.get("gscSiteUrl") ?? "") || null,
+      productionUrl: String(form.get("productionUrl") ?? "") || null,
+      deployHost: String(form.get("deployHost") ?? "") || null,
+      deployProjectId: String(form.get("deployProjectId") ?? "") || null,
       contentChannel: String(form.get("contentChannel") ?? "") || null,
       contentBrief: String(form.get("contentBrief") ?? ""),
       dailyContent: String(form.get("dailyContent") ?? "false") === "true",
       emailSenders: String(form.get("emailSenders") ?? ""),
       interruptLevel: String(form.get("interruptLevel") ?? "digest"),
+      trustLevel: String(form.get("trustLevel") ?? "operator"),
     };
 
     const url =
@@ -138,6 +148,25 @@ export function ProjectForm({
         </Field>
       </div>
 
+      <Field label="Trust budget" htmlFor="trustLevel">
+        <select
+          id="trustLevel"
+          name="trustLevel"
+          defaultValue={initial?.trustLevel ?? "operator"}
+          className={fieldClass}
+        >
+          <option value="observer">observer — read only</option>
+          <option value="drafter">drafter — drafts only, needs you</option>
+          <option value="operator">operator — approve-gated (default)</option>
+          <option value="autopilot">autopilot — narrow auto-resolve</option>
+        </select>
+      </Field>
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+        Observer blocks writes. Drafter drafts without sending/opening PRs.
+        Operator is the default approve gate. Autopilot auto-finishes safe
+        non-email code successes only.
+      </p>
+
       <Field label="Repo URL" htmlFor="repoUrl">
         <input
           id="repoUrl"
@@ -178,6 +207,48 @@ export function ProjectForm({
           placeholder="sc-domain:example.com or https://example.com/"
         />
       </Field>
+
+      <Field label="Production URL" htmlFor="productionUrl">
+        <input
+          id="productionUrl"
+          name="productionUrl"
+          type="url"
+          defaultValue={initial?.productionUrl}
+          className={fieldClass}
+          placeholder="https://app.example.com"
+        />
+      </Field>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Deploy host" htmlFor="deployHost">
+          <select
+            id="deployHost"
+            name="deployHost"
+            defaultValue={initial?.deployHost || ""}
+            className={fieldClass}
+          >
+            <option value="">none</option>
+            {deployHosts.map((host) => (
+              <option key={host} value={host}>
+                {host}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Deploy project / service id" htmlFor="deployProjectId">
+          <input
+            id="deployProjectId"
+            name="deployProjectId"
+            defaultValue={initial?.deployProjectId}
+            className={fieldClass}
+            placeholder="prj_… (Vercel) or UUID (Railway project/service)"
+          />
+        </Field>
+      </div>
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+        Set deploy host to vercel/railway (or leave blank to auto-detect). Jarvis
+        also needs VERCEL_TOKEN / RAILWAY_TOKEN in its Railway Variables.
+      </p>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Content channel" htmlFor="contentChannel">

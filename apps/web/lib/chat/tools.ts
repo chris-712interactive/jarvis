@@ -39,11 +39,27 @@ import {
 } from "@/lib/analytics/gsc";
 import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
 import {
+  enrichCodeBriefWithGsc,
+  resolveJobKind,
+} from "@/lib/jobs/job-intent";
+import {
   generateBriefing,
   getLatestBriefing,
 } from "@/lib/briefing/generate";
 import { runPrWatchdog } from "@/lib/jobs/pr-watchdog";
+import {
+  refreshProjectDeployStatus,
+  runDeployWatchdog,
+} from "@/lib/jobs/deploy-watchdog";
 import { jobKinds, interruptLevels } from "@/lib/db/schema";
+import {
+  canQueueDailyContent,
+  canStartJobKind,
+  canUseMutatingTool,
+  canWriteVaultNote,
+  projectTrust,
+  trustDenialMessage,
+} from "@/lib/trust/policy";
 
 function vaultErrorMessage(error: unknown) {
   if (error instanceof VaultError) return error.message;
@@ -146,11 +162,18 @@ export function createOperatorTools(activeProjectId?: string | null) {
             vaultPath: p.vaultPath,
             gaPropertyId: p.gaPropertyId,
             gscSiteUrl: p.gscSiteUrl,
+            productionUrl: p.productionUrl,
+            deployHost: p.deployHost,
+            deployProjectId: p.deployProjectId,
+            deployStatus: p.deployStatus,
+            deployStatusDetail: p.deployStatusDetail,
+            deployCheckedAt: p.deployCheckedAt,
             contentChannel: p.contentChannel,
             dailyContent: p.dailyContent,
             emailSenders: p.emailSenders,
             needsYou: p.needsYou,
             interruptLevel: p.interruptLevel,
+            trustLevel: p.trustLevel,
             notes: p.notes,
           }));
       },
@@ -213,12 +236,19 @@ export function createOperatorTools(activeProjectId?: string | null) {
             vaultPath: project.vaultPath,
             gaPropertyId: project.gaPropertyId,
             gscSiteUrl: project.gscSiteUrl,
+            productionUrl: project.productionUrl,
+            deployHost: project.deployHost,
+            deployProjectId: project.deployProjectId,
+            deployStatus: project.deployStatus,
+            deployStatusDetail: project.deployStatusDetail,
+            deployCheckedAt: project.deployCheckedAt,
             contentChannel: project.contentChannel,
             contentBrief: project.contentBrief,
             dailyContent: project.dailyContent,
             emailSenders: project.emailSenders,
             needsYou: project.needsYou,
             interruptLevel: project.interruptLevel,
+            trustLevel: project.trustLevel,
             notes: project.notes,
           },
           jobs: jobs.map((j) => ({
@@ -361,6 +391,10 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         }
 
+        const project = await getProject(job.projectId);
+        const mutate = canUseMutatingTool(project?.trustLevel, "resolve_job");
+        if (!mutate.ok) return { error: mutate.error };
+
         const summary =
           note?.trim() ||
           `Approved / resolved by operator. (${job.title})`;
@@ -381,6 +415,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
               }
             : null,
           emailReply: resolved?.emailReply ?? null,
+          trustLevel: project ? projectTrust(project) : null,
         };
       },
     }),
@@ -403,6 +438,11 @@ export function createOperatorTools(activeProjectId?: string | null) {
             candidates: resolved.candidates ?? null,
           };
         }
+        const mutate = canUseMutatingTool(
+          resolved.project.trustLevel,
+          "clear_needs_you",
+        );
+        if (!mutate.ok) return { error: mutate.error };
         const updated = await updateProject(resolved.project.id, {
           needsYou: null,
         });
@@ -421,19 +461,21 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     start_job: tool({
       description:
-        "Start an async background job for a project lane. When the user names a lane, pass it as `lane` — do not rely on the UI dropdown. Prefer this for research, ops, drafts, and coding missions. Use kind `code` for implement/PR work — that launches a Cursor Cloud Agent when CURSOR_API_KEY and a GitHub repo URL are set.",
+        "Start an async background job for a project lane. When the user names a lane, pass it as `lane` — do not rely on the UI dropdown. Use kind `code` for implement/fix/PR/SEO site updates — that launches a Cursor Cloud Agent when CURSOR_API_KEY and a GitHub repo URL are set. kind `research`/`ops` only write Obsidian markdown notes (never site changes). For \"plan and implement SEO\", use kind `code` and put the plan + Search Console highlights in the brief.",
       inputSchema: z.object({
         title: z.string().min(1).max(200).describe("Short job title"),
         brief: z
           .string()
           .min(1)
           .max(8000)
-          .describe("What the worker should accomplish"),
+          .describe(
+            "What the worker should accomplish. For SEO code jobs, include concrete on-site targets (pages/meta/queries) from get_lane_search — not a docs-only plan.",
+          ),
         kind: z
           .enum(jobKinds)
           .optional()
           .describe(
-            "code (Cloud Agent) | research | ops | message. Defaults to ops. Prefer code for implement/fix/PR work.",
+            "code (Cloud Agent PR) | research | ops | message. Defaults to ops. MUST be code for implement/fix/PR/SEO site updates. research/ops = vault notes only.",
           ),
         ...laneFields,
         interruptLevel: z
@@ -461,12 +503,30 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         }
         const project = resolved.project;
+        const mutate = canUseMutatingTool(project.trustLevel, "start_job");
+        if (!mutate.ok) return { error: mutate.error };
+
+        const resolvedKind = resolveJobKind({ kind, title, brief });
+        const kindGate = canStartJobKind(project.trustLevel, resolvedKind.kind);
+        if (!kindGate.ok) return { error: kindGate.error };
+
+        let finalBrief = brief;
+        let gscEnriched = false;
+        if (resolvedKind.kind === "code") {
+          const enriched = await enrichCodeBriefWithGsc({
+            project,
+            title,
+            brief,
+          });
+          finalBrief = enriched.brief;
+          gscEnriched = enriched.enriched;
+        }
 
         const job = await createJob({
           projectId: project.id,
           title,
-          brief,
-          kind: kind ?? "ops",
+          brief: finalBrief,
+          kind: resolvedKind.kind,
           status: "queued",
           summary: "Queued for background worker.",
           interruptLevel: interruptLevel ?? project.interruptLevel ?? "digest",
@@ -490,6 +550,14 @@ export function createOperatorTools(activeProjectId?: string | null) {
         return {
           started: true,
           matchedBy: resolved.matchedBy,
+          trustLevel: projectTrust(project),
+          kindResolved: {
+            requested: kind ?? "ops",
+            final: resolvedKind.kind,
+            coerced: resolvedKind.coerced,
+            reason: resolvedKind.reason,
+            gscEnriched,
+          },
           job: {
             id: active.id,
             title: active.title,
@@ -542,6 +610,14 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         }
         const project = resolved.project;
+        if (!canWriteVaultNote(project.trustLevel)) {
+          return {
+            error: trustDenialMessage(
+              projectTrust(project),
+              "write_vault_note",
+            ),
+          };
+        }
         if (!project.vaultPath) {
           return {
             error: `Project "${project.name}" has no vault path configured.`,
@@ -891,7 +967,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             projectName: project.name,
             gscSiteUrl: project.gscSiteUrl,
             summary,
-            note: "Use rising/declining queries, top pages, sitemap errors, and index coverageState/verdict for SEO priorities. Do not invent rankings or index status beyond this data.",
+            note: "Use rising/declining queries, top pages, device/country splits, sitemap errors, and index coverageState/verdict for SEO priorities. Do not invent rankings or index status beyond this data. If the user asked to implement/ship SEO updates, follow up with start_job kind=code (not research/ops) and put these targets in the brief.",
           };
         } catch (error) {
           return { error: gscErrorMessage(error) };
@@ -921,6 +997,14 @@ export function createOperatorTools(activeProjectId?: string | null) {
             candidates: resolved.candidates ?? null,
           };
         }
+        if (!canQueueDailyContent(resolved.project.trustLevel)) {
+          return {
+            error: trustDenialMessage(
+              projectTrust(resolved.project),
+              "draft_daily_post",
+            ),
+          };
+        }
         const result = await queueDailyContentDrafts({
           projectId: resolved.project.id,
           force: Boolean(force),
@@ -929,6 +1013,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           matchedBy: resolved.matchedBy,
           projectName: resolved.project.name,
           contentChannel: resolved.project.contentChannel,
+          trustLevel: projectTrust(resolved.project),
           ...result,
           note:
             result.queued.length > 0
@@ -1030,6 +1115,69 @@ export function createOperatorTools(activeProjectId?: string | null) {
               : result.failing.length > 0
                 ? "Failing PRs found but already notified recently."
                 : "No failing CI on scanned open PRs.",
+        };
+      },
+    }),
+
+    get_lane_deploy: tool({
+      description:
+        "Live production status for a lane: URL health check plus Vercel/Railway deploy state when configured. Persists the result on the lane for the dashboard. Requires productionUrl and/or deployHost + deployProjectId.",
+      inputSchema: z.object({
+        ...laneFields,
+      }),
+      execute: async ({ projectId, lane }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
+        if (
+          !project.productionUrl?.trim() &&
+          !project.deployProjectId?.trim()
+        ) {
+          return {
+            error: `Lane "${project.name}" has no productionUrl or deployProjectId. Set them on the project edit form.`,
+          };
+        }
+        try {
+          const snapshot = await refreshProjectDeployStatus(project);
+          return {
+            matchedBy: resolved.matchedBy,
+            ...snapshot,
+            note: "Use status/detail for operator answers. Do not invent uptime beyond this probe.",
+          };
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Deploy status check failed",
+          };
+        }
+      },
+    }),
+
+    check_deploy_health: tool({
+      description:
+        "Scan all active lanes with production URL / deploy ids, refresh cached status, and create Alerts for down/degraded. Same step as cron /api/cron/tick deployHealth.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const result = await runDeployWatchdog();
+        return {
+          ...result,
+          note:
+            result.notified.length > 0
+              ? `Posted ${result.notified.length} deploy alert(s).`
+              : result.unhealthy.length > 0
+                ? "Unhealthy lanes found but already notified recently."
+                : "All monitored production lanes look healthy (or none configured).",
         };
       },
     }),

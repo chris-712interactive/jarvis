@@ -1,9 +1,11 @@
 import { z } from "zod";
 import {
+  deployHosts,
   interruptLevels,
   jobKinds,
   jobStatuses,
   projectStatuses,
+  trustLevels,
 } from "@/lib/db/schema";
 
 const optionalUrl = z
@@ -52,11 +54,22 @@ export const createProjectSchema = z.object({
   needsYou: optionalText,
   gaPropertyId: optionalText,
   gscSiteUrl: optionalText,
+  productionUrl: optionalUrl,
+  deployHost: z
+    .union([z.enum(deployHosts), z.literal(""), z.null()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) return undefined;
+      if (value === "" || value === null) return null;
+      return value;
+    }),
+  deployProjectId: optionalText,
   contentChannel: optionalText,
   contentBrief: z.string().trim().max(4000).optional().default(""),
   dailyContent: optionalBool,
   emailSenders: z.string().trim().max(4000).optional().default(""),
   interruptLevel: z.enum(interruptLevels).optional().default("digest"),
+  trustLevel: z.enum(trustLevels).optional().default("operator"),
 });
 
 export const updateProjectSchema = createProjectSchema.partial().extend({

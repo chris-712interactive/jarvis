@@ -62,10 +62,14 @@ Examples: a client site, a SaaS product, a content brand, a personal ops area. N
 
 ## Trust ladder
 
-1. **Observer** — reads repos, summarizes, answers questions
-2. **Drafter** — creates drafts (PRs, issues, emails) without publishing
-3. **Operator** — can open PRs, create issues, send approved messages
-4. **Autopilot** — limited auto-merge / auto-triage on allowlisted repos
+Per-lane `trustLevel` on projects (default **operator**). Promote on the project form — never globally.
+
+1. **Observer** — reads repos, summarizes, answers questions (mutating tools blocked)
+2. **Drafter** — creates drafts (jobs, vault notes, email drafts) without publishing; Cloud Agents do not auto-open PRs and finish as Needs you; cannot send email replies
+3. **Operator** — can open PRs, create issues, send approved messages (current default approve gate)
+4. **Autopilot** — like operator; narrow auto-finish for safe non-email code successes (no Skool auto-publish, no auto-merge)
+
+Enforcement lives in `apps/web/lib/trust/policy.ts` and is applied in chat tools, the job runner, email ingest, daily content, and Approve & reply.
 
 Promote per project, never globally on day one.
 

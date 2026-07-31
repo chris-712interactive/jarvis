@@ -8,7 +8,9 @@ import {
   ProjectsSection,
   RecentSection,
 } from "@/components/dashboard";
+import { ProductionStrip } from "@/components/production-strip";
 import { getDashboardData, seedIfEmpty } from "@/lib/db/queries";
+import { isLaneDeployConfigured } from "@/lib/deploy/status";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +35,30 @@ export default async function HomePage() {
         }
       : undefined;
 
+  const productionLanes = data.projects
+    .filter(isLaneDeployConfigured)
+    .map((project) => ({
+      id: project.id,
+      name: project.name,
+      productionUrl: project.productionUrl,
+      deployHost: project.deployHost,
+      status: project.deployStatus,
+      detail: project.deployStatusDetail,
+      checkedAt: project.deployCheckedAt,
+    }))
+    .sort((a, b) => {
+      const rank = (status: string | null | undefined) => {
+        if (status === "down") return 0;
+        if (status === "degraded") return 1;
+        if (status === "building") return 2;
+        if (status === "unknown") return 3;
+        return 4;
+      };
+      const diff = rank(a.status) - rank(b.status);
+      if (diff !== 0) return diff;
+      return a.name.localeCompare(b.name);
+    });
+
   return (
     <>
       <SiteHeader />
@@ -44,6 +70,7 @@ export default async function HomePage() {
           projectCount={data.counts.projects}
           topAlert={topAlert}
         />
+        <ProductionStrip initialLanes={productionLanes} />
         <NeedsYouSection
           projects={data.needsYou.projects}
           jobs={data.needsYou.jobs}

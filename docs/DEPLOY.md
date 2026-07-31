@@ -51,10 +51,13 @@ One replica only — SQLite does not like multiple writers.
 | `CURSOR_API_KEY` | for code jobs | Cursor Dashboard → API Keys |
 | `GITHUB_TOKEN` | recommended | private repos + PR CI watchdog |
 | `GA4_SERVICE_ACCOUNT_JSON` | for GA4 / Search Console | Paste the **full** service-account JSON key (one line is fine). Same key is reused for GSC. Or set `GSC_SERVICE_ACCOUNT_JSON` instead. **Do not** rely on `GOOGLE_APPLICATION_CREDENTIALS=./lib/google/sa.json` on Railway — that file is gitignored and never copied into the Docker image. |
+| `VERCEL_TOKEN` | for Vercel deploy status | Vercel → Settings → Tokens |
+| `VERCEL_WEBHOOK_SECRET` | for Vercel deploy webhooks | Secret shown when creating the webhook |
+| `RAILWAY_TOKEN` | for Railway deploy status | Railway → Account → Tokens |
+| `DEPLOY_WEBHOOK_SECRET` | for Railway webhook URL | Falls back to `CRON_SECRET`; append `?secret=` on the Railway webhook URL |
 | Gmail OAuth vars | optional | see `apps/web/.env.example` |
 
 Enabling Search Console in GCP and adding the SA email on each property is **not** enough by itself — Railway still needs the private key JSON in one of those env vars.
-
 Also set if you use Gmail after deploy:
 
 ```bash
@@ -101,7 +104,7 @@ curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
   "https://YOUR_RAILWAY_DOMAIN/api/cron/tick"
 ```
 
-Expect JSON with `jobs`, `email`, `dailyContent`, `briefings`, `watchdog`.
+Expect JSON with `jobs`, `email`, `dailyContent`, `briefings`, `watchdog`, `deployHealth`.
 
 ### Alternate: Nixpacks with Root Directory
 
@@ -148,6 +151,15 @@ What `/api/cron/tick` does each run:
 3. Queue daily content drafts (idempotent per day)
 4. Generate morning/evening briefing when the local hour matches
 5. Watch open PR CI on lanes with GitHub repos (notify once on failure)
+6. Probe production URL / Vercel / Railway status on configured lanes (notify on down/degraded)
+
+### Deploy webhooks (near-real-time)
+
+1. Set `DEPLOY_WEBHOOK_SECRET` (or reuse `CRON_SECRET`) and `VERCEL_WEBHOOK_SECRET` on Jarvis
+2. **Vercel** → Team/Account Settings → Webhooks → endpoint `https://YOUR_JARVIS/api/webhooks/vercel` (events: deployment created/succeeded/error/canceled)
+3. **Railway** → each project Settings → Webhooks → `https://YOUR_JARVIS/api/webhooks/railway?secret=YOUR_SECRET`
+4. Lane `deployProjectId` must match the Vercel project id/name or Railway project/service id
+5. Hub **Live environments** strip reads cached status and polls `/api/deploy/overview` every 60s
 
 ### Host crontab example
 
@@ -170,4 +182,5 @@ Query helpers on tick: `?forceBriefing=1`, `?forceContent=1`, `?skipWatchdog=1`,
 
 - `get_briefing` / `run_briefing` — read or generate digests
 - `check_pr_ci` — run the PR CI watchdog on demand
+- `get_lane_deploy` / `check_deploy_health` — production URL + Vercel/Railway status
 - `ingest_emails` / `draft_daily_post` — same as before

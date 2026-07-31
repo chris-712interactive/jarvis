@@ -6,6 +6,11 @@ import {
 } from "@/lib/db/queries";
 import type { Project } from "@/lib/db/schema";
 import { kickJob } from "@/lib/jobs/runner";
+import {
+  canQueueDailyContent,
+  projectTrust,
+  trustDenialMessage,
+} from "@/lib/trust/policy";
 
 function dayStamp(at = new Date()) {
   return at.toISOString().slice(0, 10);
@@ -93,6 +98,18 @@ export async function queueDailyContentDrafts(
         projectId: project.id,
         projectName: project.name,
         reason: "Daily content drafting is off",
+      });
+      continue;
+    }
+
+    if (!canQueueDailyContent(project.trustLevel)) {
+      skipped.push({
+        projectId: project.id,
+        projectName: project.name,
+        reason: trustDenialMessage(
+          projectTrust(project),
+          "daily content drafts",
+        ),
       });
       continue;
     }

@@ -78,6 +78,28 @@ function migrateSchema(sqlite: DatabaseSync) {
   if (!projectCols.some((column) => column.name === "gsc_site_url")) {
     sqlite.exec(`ALTER TABLE projects ADD COLUMN gsc_site_url TEXT`);
   }
+  if (!projectCols.some((column) => column.name === "production_url")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN production_url TEXT`);
+  }
+  if (!projectCols.some((column) => column.name === "deploy_host")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN deploy_host TEXT`);
+  }
+  if (!projectCols.some((column) => column.name === "deploy_project_id")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN deploy_project_id TEXT`);
+  }
+  if (!projectCols.some((column) => column.name === "deploy_status")) {
+    sqlite.exec(
+      `ALTER TABLE projects ADD COLUMN deploy_status TEXT NOT NULL DEFAULT 'unknown'`,
+    );
+  }
+  if (!projectCols.some((column) => column.name === "deploy_status_detail")) {
+    sqlite.exec(
+      `ALTER TABLE projects ADD COLUMN deploy_status_detail TEXT NOT NULL DEFAULT ''`,
+    );
+  }
+  if (!projectCols.some((column) => column.name === "deploy_checked_at")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN deploy_checked_at INTEGER`);
+  }
   if (!projectCols.some((column) => column.name === "content_channel")) {
     sqlite.exec(`ALTER TABLE projects ADD COLUMN content_channel TEXT`);
   }
@@ -94,6 +116,11 @@ function migrateSchema(sqlite: DatabaseSync) {
   if (!projectCols.some((column) => column.name === "email_senders")) {
     sqlite.exec(
       `ALTER TABLE projects ADD COLUMN email_senders TEXT NOT NULL DEFAULT ''`,
+    );
+  }
+  if (!projectCols.some((column) => column.name === "trust_level")) {
+    sqlite.exec(
+      `ALTER TABLE projects ADD COLUMN trust_level TEXT NOT NULL DEFAULT 'operator'`,
     );
   }
 
@@ -163,11 +190,18 @@ function createSqlite() {
       needs_you TEXT,
       ga_property_id TEXT,
       gsc_site_url TEXT,
+      production_url TEXT,
+      deploy_host TEXT,
+      deploy_project_id TEXT,
+      deploy_status TEXT NOT NULL DEFAULT 'unknown',
+      deploy_status_detail TEXT NOT NULL DEFAULT '',
+      deploy_checked_at INTEGER,
       content_channel TEXT,
       content_brief TEXT NOT NULL DEFAULT '',
       daily_content INTEGER NOT NULL DEFAULT 0,
       email_senders TEXT NOT NULL DEFAULT '',
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
+      trust_level TEXT NOT NULL DEFAULT 'operator',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );

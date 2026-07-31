@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getJob, seedIfEmpty, updateJob } from "@/lib/db/queries";
+import { getJob, getProject, seedIfEmpty, updateJob } from "@/lib/db/queries";
 import { resolveJobWithSideEffects } from "@/lib/jobs/resolve";
+import { canUseMutatingTool } from "@/lib/trust/policy";
 import { updateJobSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -39,6 +40,11 @@ export async function PATCH(request: Request, { params }: Params) {
     parsed.data.status === "done" &&
     (existing.status === "needs_you" || existing.status === "failed")
   ) {
+    const project = await getProject(existing.projectId);
+    const mutate = canUseMutatingTool(project?.trustLevel, "resolve_job");
+    if (!mutate.ok) {
+      return NextResponse.json({ error: mutate.error }, { status: 403 });
+    }
     const resolved = await resolveJobWithSideEffects(id, {
       note: parsed.data.summary,
       replyDraft:

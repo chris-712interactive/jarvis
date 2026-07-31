@@ -4,11 +4,14 @@ import { getDb } from "./index";
 import {
   jobs,
   projects,
+  type DeployHost,
+  type DeployStatus,
   type InterruptLevel,
   type Job,
   type JobKind,
   type JobStatus,
   type ProjectStatus,
+  type TrustLevel,
 } from "./schema";
 
 function slugify(name: string) {
@@ -58,11 +61,18 @@ export type CreateProjectInput = {
   needsYou?: string | null;
   gaPropertyId?: string | null;
   gscSiteUrl?: string | null;
+  productionUrl?: string | null;
+  deployHost?: DeployHost | null;
+  deployProjectId?: string | null;
+  deployStatus?: DeployStatus;
+  deployStatusDetail?: string;
+  deployCheckedAt?: Date | null;
   contentChannel?: string | null;
   contentBrief?: string;
   dailyContent?: boolean;
   emailSenders?: string;
   interruptLevel?: InterruptLevel;
+  trustLevel?: TrustLevel;
 };
 
 export async function createProject(input: CreateProjectInput) {
@@ -86,11 +96,18 @@ export async function createProject(input: CreateProjectInput) {
     needsYou: input.needsYou?.trim() || null,
     gaPropertyId: input.gaPropertyId?.trim() || null,
     gscSiteUrl: input.gscSiteUrl?.trim() || null,
+    productionUrl: input.productionUrl?.trim() || null,
+    deployHost: input.deployHost ?? null,
+    deployProjectId: input.deployProjectId?.trim() || null,
+    deployStatus: input.deployStatus ?? "unknown",
+    deployStatusDetail: input.deployStatusDetail?.trim() ?? "",
+    deployCheckedAt: input.deployCheckedAt ?? null,
     contentChannel: input.contentChannel?.trim() || null,
     contentBrief: input.contentBrief?.trim() ?? "",
     dailyContent: Boolean(input.dailyContent),
     emailSenders: input.emailSenders?.trim() ?? "",
     interruptLevel: input.interruptLevel ?? "digest",
+    trustLevel: input.trustLevel ?? "operator",
     createdAt: now,
     updatedAt: now,
   };
@@ -131,6 +148,28 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
       input.gscSiteUrl !== undefined
         ? input.gscSiteUrl?.trim() || null
         : existing.gscSiteUrl,
+    productionUrl:
+      input.productionUrl !== undefined
+        ? input.productionUrl?.trim() || null
+        : existing.productionUrl,
+    deployHost:
+      input.deployHost !== undefined ? input.deployHost : existing.deployHost,
+    deployProjectId:
+      input.deployProjectId !== undefined
+        ? input.deployProjectId?.trim() || null
+        : existing.deployProjectId,
+    deployStatus:
+      input.deployStatus !== undefined
+        ? input.deployStatus
+        : existing.deployStatus,
+    deployStatusDetail:
+      input.deployStatusDetail !== undefined
+        ? input.deployStatusDetail.trim()
+        : existing.deployStatusDetail,
+    deployCheckedAt:
+      input.deployCheckedAt !== undefined
+        ? input.deployCheckedAt
+        : existing.deployCheckedAt,
     contentChannel:
       input.contentChannel !== undefined
         ? input.contentChannel?.trim() || null
@@ -148,6 +187,7 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
         ? input.emailSenders.trim()
         : existing.emailSenders,
     interruptLevel: input.interruptLevel ?? existing.interruptLevel,
+    trustLevel: input.trustLevel ?? existing.trustLevel,
     updatedAt: new Date(),
   };
 
