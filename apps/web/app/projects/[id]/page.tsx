@@ -4,6 +4,8 @@ import { SiteHeader } from "@/components/site-header";
 import { ProjectForm } from "@/components/project-form";
 import { VaultNotesPanel } from "@/components/vault-notes-panel";
 import { getProject, listJobs, seedIfEmpty } from "@/lib/db/queries";
+import { isLaneDeployConfigured } from "@/lib/deploy/status";
+import { refreshProjectDeployStatus } from "@/lib/jobs/deploy-watchdog";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,8 +15,22 @@ type Params = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: Params) {
   await seedIfEmpty();
   const { id } = await params;
-  const project = await getProject(id);
+  let project = await getProject(id);
   if (!project) notFound();
+
+  // Refresh once when status was never checked or is still unknown so the
+  // lane page shows a real probe (and missing-token hints) without waiting on cron.
+  if (
+    isLaneDeployConfigured(project) &&
+    (!project.deployCheckedAt || project.deployStatus === "unknown")
+  ) {
+    try {
+      await refreshProjectDeployStatus(project);
+      project = (await getProject(id)) ?? project;
+    } catch (error) {
+      console.warn("[project] deploy refresh failed", error);
+    }
+  }
 
   const projectJobs = await listJobs({ projectId: project.id });
 

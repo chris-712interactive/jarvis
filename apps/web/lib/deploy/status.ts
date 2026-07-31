@@ -61,6 +61,48 @@ export function normalizeDeployHost(
   );
 }
 
+/** Infer host when the form left deployHost blank but an id is present. */
+export function inferDeployHost(input: {
+  deployHost?: string | null;
+  deployProjectId?: string | null;
+  productionUrl?: string | null;
+}): DeployHost | null {
+  try {
+    const explicit = normalizeDeployHost(input.deployHost);
+    if (explicit) return explicit;
+  } catch {
+    // fall through to inference
+  }
+
+  const id = input.deployProjectId?.trim() || "";
+  if (/^prj_/i.test(id)) return "vercel";
+  // Railway project/service IDs are UUIDs.
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      id,
+    )
+  ) {
+    return "railway";
+  }
+  // Vercel project names are common when not using prj_ ids.
+  if (id && !input.productionUrl?.trim()) {
+    // Ambiguous non-UUID id with no URL — prefer Vercel project name.
+    return "vercel";
+  }
+  if (input.productionUrl?.trim()) return "url";
+  return null;
+}
+
+export function isLaneDeployConfigured(project: {
+  productionUrl?: string | null;
+  deployHost?: string | null;
+  deployProjectId?: string | null;
+}) {
+  return Boolean(
+    project.productionUrl?.trim() || project.deployProjectId?.trim(),
+  );
+}
+
 export async function checkUrlHealth(
   urlRaw: string,
   options?: { timeoutMs?: number },
@@ -174,7 +216,7 @@ export async function checkVercelProductionDeploy(
   const token = process.env.VERCEL_TOKEN?.trim();
   if (!token) {
     throw new DeployError(
-      "VERCEL_TOKEN is not set. Add a Vercel token in Railway Variables.",
+      "VERCEL_TOKEN is not set on Jarvis. Add a Vercel token in Railway Variables.",
       503,
     );
   }
@@ -239,31 +281,207 @@ export async function checkVercelProductionDeploy(
 }
 
 export async function checkRailwayServiceDeploy(
-  serviceId: string,
+  projectOrServiceId: string,
 ): Promise<PlatformDeploy> {
   const token = process.env.RAILWAY_TOKEN?.trim();
   if (!token) {
     throw new DeployError(
-      "RAILWAY_TOKEN is not set. Add a Railway API token in Railway Variables.",
+      "RAILWAY_TOKEN is not set on Jarvis. Add a Railway account/workspace token in Railway Variables.",
       503,
     );
   }
 
-  const query = `
-    query JarvisDeployStatus($serviceId: String!) {
-      deployments(first: 1, input: { serviceId: $serviceId }) {
-        edges {
-          node {
-            id
-            status
-            staticUrl
-            createdAt
+  const id = projectOrServiceId.trim();
+
+  // Prefer project lookup — users often paste Railway project IDs.
+  const projectQuery = `
+    query JarvisProjectDeploy($id: String!) {
+      project(id: $id) {
+        name
+        services {
+          edges {
+            node {
+              id
+              name
+              serviceInstances {
+                edges {
+                  node {
+                    latestDeployment {
+                      status
+                      staticUrl
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     }
   `;
 
+  const projectData = await railwayGraphql<{
+    project?: {
+      name?: string;
+      services?: {
+        edges?: Array<{
+          node?: {
+            id?: string;
+            name?: string;
+            serviceInstances?: {
+              edges?: Array<{
+                node?: {
+                  latestDeployment?: {
+                    status?: string;
+                    staticUrl?: string | null;
+                  } | null;
+                };
+              }>;
+            };
+          };
+        }>;
+      };
+    } | null;
+  }>(token, projectQuery, { id });
+
+  if (projectData.project) {
+    const services = projectData.project.services?.edges ?? [];
+    let best: {
+      status: string | null;
+      url: string | null;
+      serviceName: string;
+    } | null = null;
+
+    for (const edge of services) {
+      const service = edge.node;
+      if (!service) continue;
+      for (const instance of service.serviceInstances?.edges ?? []) {
+        const dep = instance.node?.latestDeployment;
+        if (!dep?.status) continue;
+        const mapped = mapRailwayState(dep.status);
+        const url = dep.staticUrl
+          ? dep.staticUrl.startsWith("http")
+            ? dep.staticUrl
+            : `https://${dep.staticUrl}`
+          : null;
+        // Prefer an unhealthy signal if any service is down; else first SUCCESS.
+        if (
+          !best ||
+          mapped === "down" ||
+          (mapped === "building" && mapRailwayState(best.status) === "ok") ||
+          (mapped === "ok" && !best.status)
+        ) {
+          best = {
+            status: dep.status,
+            url,
+            serviceName: service.name || service.id || "service",
+          };
+          if (mapped === "down") break;
+        }
+      }
+    }
+
+    if (!best) {
+      return {
+        provider: "railway",
+        state: "unknown",
+        detail: `Railway project "${projectData.project.name || id}" has no service deployments yet`,
+        url: null,
+        rawStatus: null,
+      };
+    }
+
+    const state = mapRailwayState(best.status);
+    return {
+      provider: "railway",
+      state,
+      detail: `Railway ${best.serviceName}: ${best.status || "unknown"}${best.url ? ` · ${best.url}` : ""}`,
+      url: best.url,
+      rawStatus: best.status,
+    };
+  }
+
+  // Fallback: treat the id as a service id.
+  const serviceQuery = `
+    query JarvisServiceDeploy($id: String!) {
+      service(id: $id) {
+        id
+        name
+        serviceInstances {
+          edges {
+            node {
+              latestDeployment {
+                status
+                staticUrl
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const serviceData = await railwayGraphql<{
+    service?: {
+      id?: string;
+      name?: string;
+      serviceInstances?: {
+        edges?: Array<{
+          node?: {
+            latestDeployment?: {
+              status?: string;
+              staticUrl?: string | null;
+            } | null;
+          };
+        }>;
+      };
+    } | null;
+  }>(token, serviceQuery, { id });
+
+  const service = serviceData.service;
+  if (!service) {
+    return {
+      provider: "railway",
+      state: "unknown",
+      detail: `Railway id "${id}" matched neither a project nor a service. Copy Project ID or Service ID from Railway (Cmd/Ctrl+K).`,
+      url: null,
+      rawStatus: null,
+    };
+  }
+
+  const latest =
+    service.serviceInstances?.edges?.[0]?.node?.latestDeployment ?? null;
+  if (!latest?.status) {
+    return {
+      provider: "railway",
+      state: "unknown",
+      detail: `Railway service "${service.name || id}" has no latest deployment`,
+      url: null,
+      rawStatus: null,
+    };
+  }
+
+  const raw = latest.status;
+  const state = mapRailwayState(raw);
+  const url = latest.staticUrl
+    ? latest.staticUrl.startsWith("http")
+      ? latest.staticUrl
+      : `https://${latest.staticUrl}`
+    : null;
+  return {
+    provider: "railway",
+    state,
+    detail: `Railway ${service.name || id}: ${raw}${url ? ` · ${url}` : ""}`,
+    url,
+    rawStatus: raw,
+  };
+}
+
+async function railwayGraphql<T>(
+  token: string,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
   const res = await fetch("https://backboard.railway.com/graphql/v2", {
     method: "POST",
     headers: {
@@ -271,10 +489,7 @@ export async function checkRailwayServiceDeploy(
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      query,
-      variables: { serviceId },
-    }),
+    body: JSON.stringify({ query, variables }),
     cache: "no-store",
   });
 
@@ -288,51 +503,21 @@ export async function checkRailwayServiceDeploy(
 
   const data = (await res.json()) as {
     errors?: Array<{ message?: string }>;
-    data?: {
-      deployments?: {
-        edges?: Array<{
-          node?: {
-            id?: string;
-            status?: string;
-            staticUrl?: string | null;
-          };
-        }>;
-      };
-    };
+    data?: T;
   };
 
   if (data.errors?.length) {
-    throw new DeployError(
-      data.errors.map((e) => e.message || "Railway GraphQL error").join("; "),
-      502,
-    );
+    // "Not found" style errors should fall through to the next lookup strategy.
+    const message = data.errors
+      .map((e) => e.message || "Railway GraphQL error")
+      .join("; ");
+    if (/not found|could not find|no project|no service/i.test(message)) {
+      return {} as T;
+    }
+    throw new DeployError(message, 502);
   }
 
-  const latest = data.data?.deployments?.edges?.[0]?.node;
-  if (!latest) {
-    return {
-      provider: "railway",
-      state: "unknown",
-      detail: "No deployments found for this service id",
-      url: null,
-      rawStatus: null,
-    };
-  }
-
-  const raw = latest.status || null;
-  const state = mapRailwayState(raw);
-  const url = latest.staticUrl
-    ? latest.staticUrl.startsWith("http")
-      ? latest.staticUrl
-      : `https://${latest.staticUrl}`
-    : null;
-  return {
-    provider: "railway",
-    state,
-    detail: `Service deploy ${raw || "unknown"}${url ? ` · ${url}` : ""}`,
-    url,
-    rawStatus: raw,
-  };
+  return (data.data ?? {}) as T;
 }
 
 function rollupStatus(input: {
@@ -401,15 +586,12 @@ export async function probeLaneDeploy(
   project: Project,
 ): Promise<LaneDeploySnapshot> {
   const productionUrl = project.productionUrl?.trim() || null;
-  let deployHost: DeployHost | null = null;
-  try {
-    deployHost =
-      normalizeDeployHost(project.deployHost) ??
-      (productionUrl ? "url" : null);
-  } catch {
-    deployHost = productionUrl ? "url" : null;
-  }
   const deployProjectId = project.deployProjectId?.trim() || null;
+  const deployHost = inferDeployHost({
+    deployHost: project.deployHost,
+    deployProjectId,
+    productionUrl,
+  });
 
   let health: UrlHealth | null = null;
   let platform: PlatformDeploy | null = null;
@@ -418,31 +600,75 @@ export async function probeLaneDeploy(
     health = await checkUrlHealth(productionUrl);
   }
 
-  if (deployHost === "vercel" && deployProjectId) {
-    try {
-      platform = await checkVercelProductionDeploy(deployProjectId);
-    } catch (error) {
+  if (deployHost === "vercel") {
+    if (!deployProjectId) {
       platform = {
         provider: "vercel",
         state: "unknown",
         detail:
-          error instanceof Error ? error.message : "Vercel status check failed",
+          "deployHost is vercel but deployProjectId is empty — paste the Vercel project id (prj_…) or project name.",
         url: null,
         rawStatus: null,
       };
+    } else if (!isVercelConfigured()) {
+      platform = {
+        provider: "vercel",
+        state: "unknown",
+        detail:
+          "VERCEL_TOKEN is not set on Jarvis. Add a Vercel token in Railway Variables, then re-check.",
+        url: null,
+        rawStatus: null,
+      };
+    } else {
+      try {
+        platform = await checkVercelProductionDeploy(deployProjectId);
+      } catch (error) {
+        platform = {
+          provider: "vercel",
+          state: "unknown",
+          detail:
+            error instanceof Error
+              ? error.message
+              : "Vercel status check failed",
+          url: null,
+          rawStatus: null,
+        };
+      }
     }
-  } else if (deployHost === "railway" && deployProjectId) {
-    try {
-      platform = await checkRailwayServiceDeploy(deployProjectId);
-    } catch (error) {
+  } else if (deployHost === "railway") {
+    if (!deployProjectId) {
       platform = {
         provider: "railway",
         state: "unknown",
         detail:
-          error instanceof Error ? error.message : "Railway status check failed",
+          "deployHost is railway but deployProjectId is empty — paste the Railway project or service UUID (Cmd/Ctrl+K → Copy ID).",
         url: null,
         rawStatus: null,
       };
+    } else if (!isRailwayConfigured()) {
+      platform = {
+        provider: "railway",
+        state: "unknown",
+        detail:
+          "RAILWAY_TOKEN is not set on Jarvis. Add a Railway account/workspace token in Railway Variables, then re-check.",
+        url: null,
+        rawStatus: null,
+      };
+    } else {
+      try {
+        platform = await checkRailwayServiceDeploy(deployProjectId);
+      } catch (error) {
+        platform = {
+          provider: "railway",
+          state: "unknown",
+          detail:
+            error instanceof Error
+              ? error.message
+              : "Railway status check failed",
+          url: null,
+          rawStatus: null,
+        };
+      }
     }
   } else if (deployHost === "aws") {
     platform = {
@@ -461,6 +687,15 @@ export async function probeLaneDeploy(
       detail: "URL-only health check",
       url: productionUrl,
       rawStatus: health.ok ? "up" : "down",
+    };
+  } else if (deployProjectId && !deployHost) {
+    platform = {
+      provider: "url",
+      state: "unknown",
+      detail:
+        "Could not infer deploy host from the project id. Set Deploy host to vercel or railway.",
+      url: null,
+      rawStatus: null,
     };
   }
 

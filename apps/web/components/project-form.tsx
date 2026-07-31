@@ -219,10 +219,14 @@ export function ProjectForm({
             name="deployProjectId"
             defaultValue={initial?.deployProjectId}
             className={fieldClass}
-            placeholder="Vercel project id/name or Railway service id"
+            placeholder="prj_… (Vercel) or UUID (Railway project/service)"
           />
         </Field>
       </div>
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+        Set deploy host to vercel/railway (or leave blank to auto-detect). Jarvis
+        also needs VERCEL_TOKEN / RAILWAY_TOKEN in its Railway Variables.
+      </p>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Content channel" htmlFor="contentChannel">

@@ -5,6 +5,7 @@ import {
 import { listProjects, updateProject } from "@/lib/db/queries";
 import type { DeployStatus, Project } from "@/lib/db/schema";
 import {
+  isLaneDeployConfigured,
   probeLaneDeploy,
   type LaneDeploySnapshot,
 } from "@/lib/deploy/status";
@@ -46,16 +47,6 @@ async function alreadyNotified(title: string) {
   });
 }
 
-function isMonitored(project: Project) {
-  return Boolean(
-    project.productionUrl?.trim() ||
-      (project.deployHost &&
-        project.deployHost !== "url" &&
-        project.deployProjectId?.trim()) ||
-      (project.deployHost === "url" && project.productionUrl?.trim()),
-  );
-}
-
 /** Probe + persist deploy/health for one lane. */
 export async function refreshProjectDeployStatus(project: Project) {
   const snapshot = await probeLaneDeploy(project);
@@ -70,7 +61,7 @@ export async function refreshProjectDeployStatus(project: Project) {
 /** Scan active lanes with production URL / deploy ids; alert on down/degraded. */
 export async function runDeployWatchdog(): Promise<DeployWatchdogResult> {
   const projects = await listProjects("active");
-  const monitored = projects.filter(isMonitored);
+  const monitored = projects.filter(isLaneDeployConfigured);
 
   const result: DeployWatchdogResult = {
     scanned: 0,
