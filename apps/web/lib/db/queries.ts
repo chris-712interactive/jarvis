@@ -11,6 +11,7 @@ import {
   type JobKind,
   type JobStatus,
   type ProjectStatus,
+  type TrustLevel,
 } from "./schema";
 
 function slugify(name: string) {
@@ -71,6 +72,7 @@ export type CreateProjectInput = {
   dailyContent?: boolean;
   emailSenders?: string;
   interruptLevel?: InterruptLevel;
+  trustLevel?: TrustLevel;
 };
 
 export async function createProject(input: CreateProjectInput) {
@@ -105,6 +107,7 @@ export async function createProject(input: CreateProjectInput) {
     dailyContent: Boolean(input.dailyContent),
     emailSenders: input.emailSenders?.trim() ?? "",
     interruptLevel: input.interruptLevel ?? "digest",
+    trustLevel: input.trustLevel ?? "operator",
     createdAt: now,
     updatedAt: now,
   };
@@ -184,6 +187,7 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
         ? input.emailSenders.trim()
         : existing.emailSenders,
     interruptLevel: input.interruptLevel ?? existing.interruptLevel,
+    trustLevel: input.trustLevel ?? existing.trustLevel,
     updatedAt: new Date(),
   };
 

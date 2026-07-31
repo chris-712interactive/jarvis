@@ -49,7 +49,8 @@ export default async function ProjectDetailPage({ params }: Params) {
           <div className="space-y-8">
             <section className="hud-frame px-5 py-6 sm:px-6">
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-beam">
-                {project.status} {"//"} {project.interruptLevel}
+                {project.status} {"//"} {project.interruptLevel} {"//"} trust{" "}
+                {project.trustLevel}
               </p>
               <h1 className="mt-3 font-[family-name:var(--font-display)] text-4xl font-extrabold tracking-tight sm:text-5xl">
                 {project.name}
@@ -238,6 +239,7 @@ export default async function ProjectDetailPage({ params }: Params) {
                   dailyContent: Boolean(project.dailyContent),
                   emailSenders: project.emailSenders ?? "",
                   interruptLevel: project.interruptLevel,
+                  trustLevel: project.trustLevel,
                 }}
               />
             </div>

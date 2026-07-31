@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 
 const statuses = ["active", "paused", "archived"] as const;
 const interrupts = ["silent", "digest", "nudge", "interrupt"] as const;
+const trustLevels = ["observer", "drafter", "operator", "autopilot"] as const;
 const deployHosts = ["url", "vercel", "railway", "aws"] as const;
 
 const fieldClass = "field";
@@ -34,6 +35,7 @@ export function ProjectForm({
     dailyContent: boolean;
     emailSenders: string;
     interruptLevel: (typeof interrupts)[number];
+    trustLevel: (typeof trustLevels)[number];
   };
 }) {
   const router = useRouter();
@@ -64,6 +66,7 @@ export function ProjectForm({
       dailyContent: String(form.get("dailyContent") ?? "false") === "true",
       emailSenders: String(form.get("emailSenders") ?? ""),
       interruptLevel: String(form.get("interruptLevel") ?? "digest"),
+      trustLevel: String(form.get("trustLevel") ?? "operator"),
     };
 
     const url =
@@ -144,6 +147,25 @@ export function ProjectForm({
           </select>
         </Field>
       </div>
+
+      <Field label="Trust budget" htmlFor="trustLevel">
+        <select
+          id="trustLevel"
+          name="trustLevel"
+          defaultValue={initial?.trustLevel ?? "operator"}
+          className={fieldClass}
+        >
+          <option value="observer">observer — read only</option>
+          <option value="drafter">drafter — drafts only, needs you</option>
+          <option value="operator">operator — approve-gated (default)</option>
+          <option value="autopilot">autopilot — narrow auto-resolve</option>
+        </select>
+      </Field>
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+        Observer blocks writes. Drafter drafts without sending/opening PRs.
+        Operator is the default approve gate. Autopilot auto-finishes safe
+        non-email code successes only.
+      </p>
 
       <Field label="Repo URL" htmlFor="repoUrl">
         <input

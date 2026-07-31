@@ -2,7 +2,7 @@ import { generateText } from "ai";
 import { getJob, getProject, listJobs, updateJob } from "@/lib/db/queries";
 import { createNotification } from "@/lib/db/notifications";
 import { getChatModel, isChatConfigured } from "@/lib/chat/model";
-import type { Job, JobKind, Project } from "@/lib/db/schema";
+import type { Job, JobKind, Project, TrustLevel } from "@/lib/db/schema";
 import { jobNotePath, contentNotePath, writeVaultNote, VaultError } from "@/lib/vault/notes";
 import {
   createCloudAgent,
@@ -19,6 +19,13 @@ import {
   buildCodeAgentRequirements,
   looksLikeCodeIntent,
 } from "@/lib/jobs/job-intent";
+import {
+  canLaunchCloudAgent,
+  codeLaunchOptions,
+  projectTrust,
+  terminalStatusForSuccessfulJob,
+  trustDenialMessage,
+} from "@/lib/trust/policy";
 
 /** Keep vault jobs visible in "In flight" long enough to notice. */
 const MIN_RUNNING_MS = 8000;
@@ -161,10 +168,13 @@ async function writeJobArtifact(job: Job, project: Project) {
   }
 }
 
-function autoCreatePr() {
-  const raw = process.env.CURSOR_AGENT_AUTO_PR?.trim().toLowerCase();
-  if (raw === "0" || raw === "false" || raw === "no") return false;
-  return true;
+function autoCreatePr(trust?: TrustLevel | null) {
+  const envAllows = (() => {
+    const raw = process.env.CURSOR_AGENT_AUTO_PR?.trim().toLowerCase();
+    if (raw === "0" || raw === "false" || raw === "no") return false;
+    return true;
+  })();
+  return envAllows && codeLaunchOptions(trust).autoCreatePR;
 }
 
 function agentMode(job?: Pick<Job, "title" | "brief">): "agent" | "plan" {
@@ -253,6 +263,16 @@ async function launchCodeAgent(job: Job) {
     return failJob(job, `Code job failed — project ${job.projectId} is missing.`);
   }
 
+  if (!canLaunchCloudAgent(project.trustLevel)) {
+    return needsYouJob(
+      job,
+      trustDenialMessage(
+        projectTrust(project),
+        "launch Cloud Agent — promote lane trust to drafter+",
+      ),
+    );
+  }
+
   if (!isCursorConfigured()) {
     return needsYouJob(
       job,
@@ -275,7 +295,7 @@ async function launchCodeAgent(job: Job) {
       name: job.title,
       repoUrl: parsed.url,
       startingRef,
-      autoCreatePR: autoCreatePr(),
+      autoCreatePR: autoCreatePr(project.trustLevel),
       mode: agentMode(job),
       modelId: process.env.CURSOR_AGENT_MODEL?.trim() || undefined,
     });
@@ -395,14 +415,23 @@ async function refreshCodeAgent(job: Job) {
         return updated;
       }
 
+      const project = await getProject(job.projectId);
+      const terminal = terminalStatusForSuccessfulJob({
+        trust: project?.trustLevel,
+        kind: "code",
+        emailMessageId: job.emailMessageId,
+      });
       const updated = await updateJob(job.id, {
-        status: "done",
+        status: terminal,
         summary,
         artifactUrl,
         agentRunId: runId,
       });
       await createNotification({
-        title: `Code done: ${job.title}`,
+        title:
+          terminal === "needs_you"
+            ? `Code ready (review): ${job.title}`
+            : `Code done: ${job.title}`,
         body: summary,
         level: job.interruptLevel,
         projectId: job.projectId,
@@ -465,7 +494,15 @@ async function finishVaultJob(job: Job) {
     return needsYouJob(job, summary, { artifactUrl: artifact.path });
   }
 
+  const terminal = terminalStatusForSuccessfulJob({
+    trust: project.trustLevel,
+    kind: job.kind,
+    emailMessageId: job.emailMessageId,
+  });
   const summary = `Wrote Obsidian note \`${artifact.path}\`. Brief: ${brief}`;
+  if (terminal === "needs_you") {
+    return needsYouJob(job, summary, { artifactUrl: artifact.path });
+  }
   const updated = await updateJob(job.id, {
     status: "done",
     summary,

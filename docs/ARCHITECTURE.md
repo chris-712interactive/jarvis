@@ -364,6 +364,7 @@ System prompt should encode: brevity, project grounding, tool discipline, interr
 
 - Per-project secrets vault; never put tokens in prompts
 - Tool allowlists per project
+- **Trust budgets** — `projects.trust_level` (`observer` | `drafter` | `operator` | `autopilot`) enforced in `lib/trust/policy.ts`
 - Full audit log of tool calls and job outcomes
 - Human-in-the-loop for hard writes
 - Separate “personal” vs “client” workspaces if needed

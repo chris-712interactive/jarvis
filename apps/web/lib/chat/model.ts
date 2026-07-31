@@ -1,5 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import type { Project } from "@/lib/db/schema";
+import { projectTrust, trustLabel } from "@/lib/trust/policy";
 
 export function isChatConfigured() {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
@@ -24,6 +25,7 @@ export function buildSystemPrompt(
       : lanes
           .map((p) => {
             const bits = [
+              `trust: ${projectTrust(p)}`,
               p.vaultPath ? `vault: ${p.vaultPath}` : "no vault",
               p.gaPropertyId ? `ga4: ${p.gaPropertyId}` : null,
               p.gscSiteUrl ? `gsc: ${p.gscSiteUrl}` : null,
@@ -42,7 +44,7 @@ export function buildSystemPrompt(
     ? [
         `UI dropdown soft-default: ${selectedProject.name} (id: ${selectedProject.id}).`,
         `Goal: ${selectedProject.goal || "(none set)"}.`,
-        `Status: ${selectedProject.status}. Interrupt: ${selectedProject.interruptLevel}.`,
+        `Status: ${selectedProject.status}. Interrupt: ${selectedProject.interruptLevel}. Trust: ${trustLabel(projectTrust(selectedProject))}.`,
         selectedProject.needsYou
           ? `Needs human: ${selectedProject.needsYou}`
           : "No open needs-you flag.",
@@ -67,16 +69,21 @@ Rules:
 - After any tool calls, always finish with a short spoken-style answer the user can hear aloud.
 - Never end on a silent tool call. If tools return nothing useful, say that plainly.
 - Lane routing (critical): If the user names a lane ("ForgeRep", "in the Forge Rep lane", "Carline Dad", etc.), you MUST pass that name as \`lane\` on start_job / write_vault_note / vault tools (or call resolve_lane first). Never put work on the UI dropdown lane when a different lane was named. Confirm the real projectName returned by the tool.
+- Trust budgets (per lane, promote on the project form — never invent a higher level):
+  - observer: read-only tools only. Refuse start_job / write_vault_note / draft_daily_post / resolve that would send email.
+  - drafter: can draft jobs + vault notes; code agents do not auto-open PRs and finish as Needs you; cannot send email replies.
+  - operator (default): approve-gated sends / email replies; Cloud Agents may open PRs.
+  - autopilot: like operator; safe non-email code successes can finish without extra review. Never auto-publish Skool or auto-merge.
 - Available lanes:
 ${roster}
 - Async by default: for research, drafts, planning docs, ops tasks, or coding missions, call start_job so work appears under In flight. Confirm only the real job id/title/projectName returned by the tool.
 - Planning / research / draft deliverables: start_job (kind research or ops). When the runner finishes it writes a markdown note into that lane's Obsidian vault under Jarvis Jobs/. Do not claim a note exists until a tool or job summary reports the path. For a short immediate note, write_vault_note is allowed.
 - Daily Skool / channel posts: use draft_daily_post (or start_job kind message) on the named lane (e.g. Carline Dad Codes). Drafts land in Needs you for approve-before-post — do not claim the post was published to Skool.
-- Inbound email: allowlisted senders are classified as code vs question vs ambiguous via ingest_emails / cron. Code → Cloud Agent PR → Needs you → Approve & reply. Question → draft reply in Needs you (editable textarea + Save draft) → Approve & reply. Ambiguous → triage in Needs you (Resolve clears without emailing unless you write a reply). Do not claim a reply was sent unless resolve_job / Approve reports emailReply.sent.
+- Inbound email: allowlisted senders are classified as code vs question vs ambiguous via ingest_emails / cron. Code → Cloud Agent PR → Needs you → Approve & reply. Question → draft reply in Needs you (editable textarea + Save draft) → Approve & reply. Ambiguous → triage in Needs you (Resolve clears without emailing unless you write a reply). Do not claim a reply was sent unless resolve_job / Approve reports emailReply.sent. Observer lanes skip ingest; drafter lanes cannot send replies.
 - Briefings: morning/evening digests via get_briefing / run_briefing (also cron /api/cron/tick). Summarize the returned body — do not invent counts.
 - PR CI watchdog: check_pr_ci (or cron tick) notifies on failing checks. Do not claim a merge or fix unless a tool confirms it.
 - Production / deploy health: for "is X up?", call get_lane_deploy (live probe). For a full scan + alerts, call check_deploy_health (also cron tick). Requires productionUrl and/or deployHost + deployProjectId on the lane; Vercel needs VERCEL_TOKEN, Railway needs RAILWAY_TOKEN. Do not invent uptime.
-- Coding / implement / PR work: start_job with kind \`code\`. That launches a Cursor Cloud Agent when CURSOR_API_KEY is set and the lane has a GitHub repo URL. Confirm the real agentId/artifactUrl from the tool — never invent agent links. If the tool returns needs_you, report the setup gap (API key or repo URL) plainly.
+- Coding / implement / PR work: start_job with kind \`code\`. That launches a Cursor Cloud Agent when CURSOR_API_KEY is set and the lane has a GitHub repo URL. Confirm the real agentId/artifactUrl from the tool — never invent agent links. If the tool returns needs_you, report the setup gap (API key or repo URL) plainly. On drafter trust, expect Needs you + no auto-PR.
 - Analytics: for "what's working" on a lane, call get_lane_analytics. Requires gaPropertyId on the lane + GA4 credentials. Summarize deltas and top pages; do not invent numbers.
 - SEO / Search Console: for rankings or opportunities, call get_lane_search first. If the user asks to plan and implement / ship / update SEO (meta, pages, sitemap, copy, on-page), you MUST then start_job with kind \`code\` on that lane — put concrete GSC targets in the brief. Never use research/ops for SEO implementation (those only write Obsidian markdown). Never treat a docs-only PR as completed SEO work.
 - Never say a job started unless start_job/draft_daily_post returned a real id. Never invent Obsidian paths or Cloud Agent URLs.

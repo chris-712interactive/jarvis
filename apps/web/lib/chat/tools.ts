@@ -52,6 +52,14 @@ import {
   runDeployWatchdog,
 } from "@/lib/jobs/deploy-watchdog";
 import { jobKinds, interruptLevels } from "@/lib/db/schema";
+import {
+  canQueueDailyContent,
+  canStartJobKind,
+  canUseMutatingTool,
+  canWriteVaultNote,
+  projectTrust,
+  trustDenialMessage,
+} from "@/lib/trust/policy";
 
 function vaultErrorMessage(error: unknown) {
   if (error instanceof VaultError) return error.message;
@@ -165,6 +173,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             emailSenders: p.emailSenders,
             needsYou: p.needsYou,
             interruptLevel: p.interruptLevel,
+            trustLevel: p.trustLevel,
             notes: p.notes,
           }));
       },
@@ -239,6 +248,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             emailSenders: project.emailSenders,
             needsYou: project.needsYou,
             interruptLevel: project.interruptLevel,
+            trustLevel: project.trustLevel,
             notes: project.notes,
           },
           jobs: jobs.map((j) => ({
@@ -381,6 +391,10 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         }
 
+        const project = await getProject(job.projectId);
+        const mutate = canUseMutatingTool(project?.trustLevel, "resolve_job");
+        if (!mutate.ok) return { error: mutate.error };
+
         const summary =
           note?.trim() ||
           `Approved / resolved by operator. (${job.title})`;
@@ -401,6 +415,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
               }
             : null,
           emailReply: resolved?.emailReply ?? null,
+          trustLevel: project ? projectTrust(project) : null,
         };
       },
     }),
@@ -423,6 +438,11 @@ export function createOperatorTools(activeProjectId?: string | null) {
             candidates: resolved.candidates ?? null,
           };
         }
+        const mutate = canUseMutatingTool(
+          resolved.project.trustLevel,
+          "clear_needs_you",
+        );
+        if (!mutate.ok) return { error: mutate.error };
         const updated = await updateProject(resolved.project.id, {
           needsYou: null,
         });
@@ -483,8 +503,13 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         }
         const project = resolved.project;
+        const mutate = canUseMutatingTool(project.trustLevel, "start_job");
+        if (!mutate.ok) return { error: mutate.error };
 
         const resolvedKind = resolveJobKind({ kind, title, brief });
+        const kindGate = canStartJobKind(project.trustLevel, resolvedKind.kind);
+        if (!kindGate.ok) return { error: kindGate.error };
+
         let finalBrief = brief;
         let gscEnriched = false;
         if (resolvedKind.kind === "code") {
@@ -525,6 +550,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
         return {
           started: true,
           matchedBy: resolved.matchedBy,
+          trustLevel: projectTrust(project),
           kindResolved: {
             requested: kind ?? "ops",
             final: resolvedKind.kind,
@@ -584,6 +610,14 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         }
         const project = resolved.project;
+        if (!canWriteVaultNote(project.trustLevel)) {
+          return {
+            error: trustDenialMessage(
+              projectTrust(project),
+              "write_vault_note",
+            ),
+          };
+        }
         if (!project.vaultPath) {
           return {
             error: `Project "${project.name}" has no vault path configured.`,
@@ -944,6 +978,14 @@ export function createOperatorTools(activeProjectId?: string | null) {
             candidates: resolved.candidates ?? null,
           };
         }
+        if (!canQueueDailyContent(resolved.project.trustLevel)) {
+          return {
+            error: trustDenialMessage(
+              projectTrust(resolved.project),
+              "draft_daily_post",
+            ),
+          };
+        }
         const result = await queueDailyContentDrafts({
           projectId: resolved.project.id,
           force: Boolean(force),
@@ -952,6 +994,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           matchedBy: resolved.matchedBy,
           projectName: resolved.project.name,
           contentChannel: resolved.project.contentChannel,
+          trustLevel: projectTrust(resolved.project),
           ...result,
           note:
             result.queued.length > 0

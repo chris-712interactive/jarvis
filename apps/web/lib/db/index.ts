@@ -118,6 +118,11 @@ function migrateSchema(sqlite: DatabaseSync) {
       `ALTER TABLE projects ADD COLUMN email_senders TEXT NOT NULL DEFAULT ''`,
     );
   }
+  if (!projectCols.some((column) => column.name === "trust_level")) {
+    sqlite.exec(
+      `ALTER TABLE projects ADD COLUMN trust_level TEXT NOT NULL DEFAULT 'operator'`,
+    );
+  }
 
   const jobCols = tableColumns(sqlite, "jobs");
   if (!jobCols.some((column) => column.name === "brief")) {
@@ -196,6 +201,7 @@ function createSqlite() {
       daily_content INTEGER NOT NULL DEFAULT 0,
       email_senders TEXT NOT NULL DEFAULT '',
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
+      trust_level TEXT NOT NULL DEFAULT 'operator',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );

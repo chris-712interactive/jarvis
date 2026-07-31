@@ -18,6 +18,15 @@ export type JobKind = (typeof jobKinds)[number];
 export const interruptLevels = ["silent", "digest", "nudge", "interrupt"] as const;
 export type InterruptLevel = (typeof interruptLevels)[number];
 
+/** Per-lane trust budget (PRODUCT.md trust ladder). Default operator. */
+export const trustLevels = [
+  "observer",
+  "drafter",
+  "operator",
+  "autopilot",
+] as const;
+export type TrustLevel = (typeof trustLevels)[number];
+
 /** Where production is hosted — drives which status APIs we call. */
 export const deployHosts = ["url", "vercel", "railway", "aws"] as const;
 export type DeployHost = (typeof deployHosts)[number];
@@ -63,6 +72,10 @@ export const projects = sqliteTable("projects", {
     .$type<InterruptLevel>()
     .notNull()
     .default("digest"),
+  trustLevel: text("trust_level")
+    .$type<TrustLevel>()
+    .notNull()
+    .default("operator"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getProject, seedIfEmpty } from "@/lib/db/queries";
+import { canWriteVaultNote, projectTrust, trustDenialMessage } from "@/lib/trust/policy";
 import { writeVaultNote, VaultError } from "@/lib/vault/notes";
 
 export const runtime = "nodejs";
@@ -19,6 +20,15 @@ export async function POST(request: Request, { params }: Params) {
   const project = await getProject(id);
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  if (!canWriteVaultNote(project.trustLevel)) {
+    return NextResponse.json(
+      {
+        error: trustDenialMessage(projectTrust(project), "write vault note"),
+      },
+      { status: 403 },
+    );
   }
 
   const body = await request.json().catch(() => null);

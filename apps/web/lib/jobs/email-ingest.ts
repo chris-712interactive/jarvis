@@ -19,6 +19,11 @@ import {
   type GmailMessage,
 } from "@/lib/gmail/client";
 import type { Project } from "@/lib/db/schema";
+import {
+  canIngestEmailCodeJobs,
+  normalizeTrustLevel,
+  trustDenialMessage,
+} from "@/lib/trust/policy";
 
 function buildSenderIndex(projects: Project[]) {
   const map = new Map<string, Project[]>();
@@ -174,11 +179,35 @@ export async function ingestInboundEmails(
       }
 
       const project = matches[0];
+      const trust = normalizeTrustLevel(project.trustLevel);
+      if (trust === "observer") {
+        result.skipped.push({
+          messageId: entry.id,
+          from: message.fromEmail,
+          reason: trustDenialMessage(
+            trust,
+            `email ingest on lane "${project.name}"`,
+          ),
+        });
+        continue;
+      }
+
       const classified = await classifyEmailIntent(message, project);
       const interruptLevel =
         project.interruptLevel === "silent" ? "nudge" : project.interruptLevel;
 
       if (classified.intent === "code") {
+        if (!canIngestEmailCodeJobs(project.trustLevel)) {
+          result.skipped.push({
+            messageId: entry.id,
+            from: message.fromEmail,
+            reason: trustDenialMessage(
+              trust,
+              `email→code on lane "${project.name}"`,
+            ),
+          });
+          continue;
+        }
         if (!project.repoUrl?.trim()) {
           result.skipped.push({
             messageId: entry.id,

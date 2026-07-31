@@ -5,6 +5,7 @@ import {
   jobKinds,
   jobStatuses,
   projectStatuses,
+  trustLevels,
 } from "@/lib/db/schema";
 
 const optionalUrl = z
@@ -68,6 +69,7 @@ export const createProjectSchema = z.object({
   dailyContent: optionalBool,
   emailSenders: z.string().trim().max(4000).optional().default(""),
   interruptLevel: z.enum(interruptLevels).optional().default("digest"),
+  trustLevel: z.enum(trustLevels).optional().default("operator"),
 });
 
 export const updateProjectSchema = createProjectSchema.partial().extend({

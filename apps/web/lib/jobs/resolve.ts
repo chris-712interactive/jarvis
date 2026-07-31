@@ -6,6 +6,11 @@ import {
   sendReply,
 } from "@/lib/gmail/client";
 import type { Job } from "@/lib/db/schema";
+import {
+  canSendEmailReply,
+  projectTrust,
+  trustDenialMessage,
+} from "@/lib/trust/policy";
 
 function buildCompletionReply(job: Job, projectName: string) {
   const artifact = job.artifactUrl?.trim();
@@ -101,6 +106,19 @@ export async function resolveJobWithSideEffects(
       job =
         (await updateJob(job.id, {
           summary: `${summary} · No email reply sent (triage/clear only).`,
+        })) ?? job;
+      return { job, emailReply };
+    }
+
+    if (!canSendEmailReply(project?.trustLevel)) {
+      emailReply.skipped = true;
+      emailReply.error = trustDenialMessage(
+        projectTrust(project),
+        "send email reply — promote lane trust to operator+",
+      );
+      job =
+        (await updateJob(job.id, {
+          summary: `${summary} · Reply not sent (${emailReply.error})`,
         })) ?? job;
       return { job, emailReply };
     }
