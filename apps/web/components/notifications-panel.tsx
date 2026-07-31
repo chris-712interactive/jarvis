@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { InterruptLevel } from "@/lib/db/schema";
 
 type NotificationRow = {
@@ -102,7 +104,7 @@ export function NotificationsPanel() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-40 mt-2 w-[min(92vw,22rem)] border border-beam/25 bg-[color-mix(in_oklab,var(--panel-strong)_96%,black)] shadow-[0_18px_50px_rgba(0,0,0,0.55)]">
+        <div className="absolute right-0 top-full z-40 mt-2 w-[min(92vw,24rem)] border border-beam/25 bg-[color-mix(in_oklab,var(--panel-strong)_96%,black)] shadow-[0_18px_50px_rgba(0,0,0,0.55)]">
           <div className="flex items-center justify-between gap-3 border-b border-beam/15 px-4 py-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-beam">
               notifications
@@ -133,14 +135,16 @@ export function NotificationsPanel() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="font-[family-name:var(--font-display)] text-sm font-bold tracking-tight text-ink">
                         {item.title}
                       </p>
                       {item.body ? (
-                        <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-                          {item.body}
-                        </p>
+                        <div className="vault-md vault-md-compact mt-1">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {item.body}
+                          </ReactMarkdown>
+                        </div>
                       ) : null}
                       <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft/70">
                         {item.level} · {formatWhen(item.createdAt)}

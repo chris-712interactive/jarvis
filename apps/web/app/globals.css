@@ -694,3 +694,34 @@ a {
   accent-color: var(--flight);
 }
 
+/* Compact markdown for Alerts dropdown */
+.vault-md-compact {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.vault-md-compact h1,
+.vault-md-compact h2,
+.vault-md-compact h3,
+.vault-md-compact h4 {
+  font-size: 0.85rem;
+  margin: 0.65em 0 0.25em;
+}
+
+.vault-md-compact p,
+.vault-md-compact ul,
+.vault-md-compact ol,
+.vault-md-compact blockquote,
+.vault-md-compact pre {
+  margin: 0.35em 0;
+}
+
+.vault-md-compact pre {
+  padding: 0.5em 0.65em;
+  font-size: 0.7rem;
+}
+
+.vault-md-compact code {
+  font-size: 0.7rem;
+}
+
