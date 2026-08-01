@@ -37,6 +37,7 @@ import {
   getSearchConsoleSummary,
   isGscConfigured,
 } from "@/lib/analytics/gsc";
+import { generateLaneRecommendations } from "@/lib/analytics/recommendations";
 import { queueDailyContentDrafts } from "@/lib/jobs/daily-content";
 import {
   enrichCodeBriefWithGsc,
@@ -975,6 +976,140 @@ export function createOperatorTools(activeProjectId?: string | null) {
           };
         } catch (error) {
           return { error: gscErrorMessage(error) };
+        }
+      },
+    }),
+
+    get_lane_recommendations: tool({
+      description:
+        "Deep goal-aligned recommendations for a lane from GA4 + Search Console (site SEO, content, and social post ideas). Call this when the user asks what to do next, how to grow toward the lane goal, SEO priorities, or social/content strategy. Returns a narrative briefing plus prioritized actions with paste-ready job briefs. Optional writeVault stores Jarvis Jobs/recommendations/. Does NOT invent social engagement metrics — social ideas are grounded in search/traffic demand + contentBrief.",
+      inputSchema: z.object({
+        ...laneFields,
+        ga4Days: z
+          .number()
+          .int()
+          .min(1)
+          .max(90)
+          .optional()
+          .describe("GA4 lookback days. Defaults to 28."),
+        gscDays: z
+          .number()
+          .int()
+          .min(1)
+          .max(90)
+          .optional()
+          .describe("Search Console lookback days. Defaults to 28."),
+        includeCoverage: z
+          .boolean()
+          .optional()
+          .describe("Include GSC sitemaps + URL Inspection. Defaults to true."),
+        writeVault: z
+          .boolean()
+          .optional()
+          .describe(
+            "Write markdown under Jarvis Jobs/recommendations/. Requires drafter+ trust. Defaults to false.",
+          ),
+      }),
+      execute: async ({
+        projectId,
+        lane,
+        ga4Days,
+        gscDays,
+        includeCoverage,
+        writeVault,
+      }) => {
+        const resolved = await resolveLane({
+          projectId,
+          lane,
+          fallbackProjectId: activeProjectId,
+        });
+        if (!resolved.ok) {
+          return {
+            error: resolved.error,
+            candidates: resolved.candidates ?? null,
+          };
+        }
+        const project = resolved.project;
+        if (!project.gaPropertyId?.trim() && !project.gscSiteUrl?.trim()) {
+          return {
+            error: `Lane "${project.name}" has neither gaPropertyId nor gscSiteUrl. Set analytics on the project form first.`,
+          };
+        }
+
+        const wantVault = Boolean(writeVault);
+        if (wantVault && !canWriteVaultNote(project.trustLevel)) {
+          return {
+            error: trustDenialMessage(
+              projectTrust(project),
+              "write recommendations vault note",
+            ),
+          };
+        }
+
+        try {
+          const result = await generateLaneRecommendations({
+            project,
+            ga4Days: ga4Days ?? 28,
+            gscDays: gscDays ?? 28,
+            includeCoverage: includeCoverage ?? true,
+            writeVault: wantVault,
+          });
+          return {
+            matchedBy: resolved.matchedBy,
+            ...result,
+            // Keep tool payload smaller for the model — full GA4/GSC dumps are huge.
+            snapshot: {
+              ga4: result.snapshot.ga4
+                ? {
+                    rangeDays: result.snapshot.ga4.rangeDays,
+                    current: result.snapshot.ga4.current,
+                    deltas: result.snapshot.ga4.deltas,
+                    topPages: result.snapshot.ga4.topPages.slice(0, 6),
+                  }
+                : null,
+              gsc: result.snapshot.gsc
+                ? {
+                    rangeDays: result.snapshot.gsc.rangeDays,
+                    startDate: result.snapshot.gsc.startDate,
+                    endDate: result.snapshot.gsc.endDate,
+                    current: result.snapshot.gsc.current,
+                    deltas: result.snapshot.gsc.deltas,
+                    risingQueries: result.snapshot.gsc.risingQueries.slice(0, 6),
+                    decliningQueries:
+                      result.snapshot.gsc.decliningQueries.slice(0, 6),
+                    topPages: result.snapshot.gsc.topPages.slice(0, 6),
+                    coverage: result.snapshot.gsc.coverage
+                      ? {
+                          sitemapTotals:
+                            result.snapshot.gsc.coverage.sitemapTotals,
+                          inspected: result.snapshot.gsc.coverage.inspectedUrls
+                            .slice(0, 4)
+                            .map((u) => ({
+                              url: u.inspectionUrl,
+                              verdict: u.indexStatusResult.verdict,
+                              coverageState: u.indexStatusResult.coverageState,
+                            })),
+                        }
+                      : null,
+                  }
+                : null,
+            },
+            note: [
+              "Present the narrative + top priorities in spoken style.",
+              "To execute: start_job with the recommendation briefSeed (kind from suggestedJobKind).",
+              "Do not invent metrics beyond this payload. Social channels have no native analytics yet.",
+              result.vaultPath ? `Vault note: ${result.vaultPath}` : null,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          };
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Recommendations failed",
+          };
         }
       },
     }),

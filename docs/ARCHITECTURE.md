@@ -300,6 +300,7 @@ Write answers to:
 - Daily Skool/channel drafts per lane (`dailyContent`, `contentChannel`, `contentBrief`)
 - Approve-before-post via **Needs you** (no Skool auto-publish yet)
 - GA4 read adapter (`gaPropertyId` + service account) for “what’s working” per lane
+- Search Console deep dive + **goal-aligned recommendations** (`get_lane_recommendations`)
 - Cron endpoint `/api/cron/daily-content`
 
 ### Phase 6b — Gmail workforce ✅ (intent + approve-gated reply)

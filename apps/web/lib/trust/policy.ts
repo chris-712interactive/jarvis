@@ -65,6 +65,7 @@ export function canUseMutatingTool(
     "list_open_prs",
     "get_lane_analytics",
     "get_lane_search",
+    "get_lane_recommendations",
     "get_lane_deploy",
     "get_briefing",
     "get_weekly_review",

@@ -386,6 +386,20 @@ export function compactedMemoryNotePath(slug?: string | null) {
   return "Memory/Current.md";
 }
 
+/** Lane growth/SEO recommendations under Jarvis Jobs/recommendations/. */
+export function recommendationsNotePath(slug?: string | null, at = new Date()) {
+  const stamp = at.toISOString().slice(0, 10);
+  if (slug?.trim()) {
+    const safeSlug = slug
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "lane";
+    return `Jarvis Jobs/recommendations/${stamp}-${safeSlug}.md`;
+  }
+  return `Jarvis Jobs/recommendations/${stamp}.md`;
+}
+
 /** Daily / channel content drafts under Content/<channel>/. */
 export function contentNotePath(
   channel: string | null | undefined,

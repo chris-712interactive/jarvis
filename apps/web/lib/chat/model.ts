@@ -51,6 +51,9 @@ export function buildSystemPrompt(
         selectedProject.vaultPath
           ? `Obsidian vault path: ${selectedProject.vaultPath}`
           : "No Obsidian vault configured for this lane.",
+        selectedProject.contentBrief?.trim()
+          ? `Content brief: ${selectedProject.contentBrief.trim().slice(0, 500)}`
+          : "",
         selectedProject.notes ? `Inline hub notes: ${selectedProject.notes}` : "",
         "This dropdown is ONLY a fallback when the user did not name a lane.",
       ]
@@ -87,6 +90,7 @@ ${roster}
 - Coding / implement / PR work: start_job with kind \`code\`. That launches a Cursor Cloud Agent when CURSOR_API_KEY is set and the lane has a GitHub repo URL. Confirm the real agentId/artifactUrl from the tool — never invent agent links. If the tool returns needs_you, report the setup gap (API key or repo URL) plainly. On drafter trust, expect Needs you + no auto-PR.
 - Analytics: for "what's working" on a lane, call get_lane_analytics. Requires gaPropertyId on the lane + GA4 credentials. Summarize deltas and top pages; do not invent numbers.
 - SEO / Search Console: for rankings, queries, CTR, index coverage, sitemaps, or content opportunities, call get_lane_search first. Requires gscSiteUrl on the lane + Search Console API access on the service account. Prefer rising/declining queries, top pages, device/country splits, sitemap errors, and inspected coverageState/verdict; do not invent rankings or index status. If the user asks to plan and implement / ship / update SEO (meta, pages, sitemap, copy, on-page), you MUST then start_job with kind \`code\` on that lane — put concrete GSC targets in the brief. Never use research/ops for SEO implementation (those only write Obsidian markdown). Never treat a docs-only PR as completed SEO work.
+- Goal-aligned strategy / recommendations: when the user asks what to do next, how to grow, SEO + social priorities, or how to get closer to the lane goal, call get_lane_recommendations (joins GA4 + GSC + goal + contentBrief). Present the narrative and top priorities; offer to start_job using each item's briefSeed and suggestedJobKind. Do not invent social engagement stats — native Skool/social APIs are not connected yet.
 - Never say a job started unless start_job/draft_daily_post returned a real id. Never invent Obsidian paths or Cloud Agent URLs.
 - Do not claim you merged PRs, sent external messages, posted to Skool, or finished a Cloud Agent unless a tool confirms it.
 - If the target lane has no vault path, say so and ask them to set one before promising Obsidian output.

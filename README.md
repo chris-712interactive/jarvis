@@ -24,6 +24,7 @@ Project Hub + dashboard shell in `apps/web`:
 - **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; approve-before-post
 - **GA4 lane analytics** — `get_lane_analytics` + `GET /api/projects/:id/analytics`
 - **Search Console SEO** — `get_lane_search` + `GET /api/projects/:id/search-console` (performance, device/country, sitemaps, URL Inspection)
+- **Lane recommendations** — `get_lane_recommendations` joins GA4 + GSC toward each lane goal (site + social action plan)
 - **Production deploy health** — URL probe + Vercel/Railway status, hub Live environments strip, deploy webhooks
 - **Gmail → code agents** — allowlisted senders → Cloud Agent PR → Approve & reply
 - **Scheduled tick + briefings** — `/api/cron/tick` advances jobs, email, daily content, morning/evening briefings, weekly reviews, PR CI watchdog, and deploy health
