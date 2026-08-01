@@ -429,15 +429,11 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
     setTtsError(null);
     setSpeaking(true);
     try {
-      // Prefer the browser default voice for the probe — custom voices are a
-      // common Chrome "never started" failure mode.
-      await speakText("Operator uplink online. Speech is working.", {
-        forceDefaultVoice: true,
-      });
+      await speakText("Operator uplink online. Speech is working.");
     } catch (err) {
       console.error("[uplink] test voice failed", err);
       setTtsError(
-        err instanceof Error ? err.message : "Browser speech failed",
+        err instanceof Error ? err.message : "Speech playback failed",
       );
     } finally {
       setSpeaking(false);
@@ -552,7 +548,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
                         setTtsError(
                           err instanceof Error
                             ? err.message
-                            : "Browser speech failed",
+                            : "Speech playback failed",
                         );
                       })
                       .finally(() => setSpeaking(false));
@@ -574,7 +570,7 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
               onClick={() => void testVoice()}
               disabled={configured !== true || speaking}
               className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
-              title="Play a short test phrase to verify browser speech"
+              title="Play a short test phrase (OpenAI TTS, browser fallback)"
             >
               Test voice
             </button>
@@ -706,8 +702,9 @@ export function ChatPanel({ projects }: { projects: Project[] }) {
             {ttsError ? (
               <p className="text-xs text-signal">
                 Speech error: {ttsError}. Click{" "}
-                <span className="font-mono">Test voice</span> again (Chrome/Edge,
-                tab unmuted, site Sound set to Allow).
+                <span className="font-mono">Test voice</span> once to unlock
+                sound (tab unmuted). Uses OpenAI TTS when{" "}
+                <span className="font-mono">OPENAI_API_KEY</span> is set.
               </p>
             ) : null}
             {ambientEnabled && ambientListening && !busy && !speaking ? (

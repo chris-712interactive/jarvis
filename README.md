@@ -33,12 +33,12 @@ Project Hub + dashboard shell in `apps/web`:
 ### Chat + async jobs (Phase 2–3 + 5)
 
 1. Copy `apps/web/.env.example` → `apps/web/.env.local`
-2. Set `OPENAI_API_KEY`
+2. Set `OPENAI_API_KEY` (also powers Speak via OpenAI TTS; optional `OPENAI_TTS_VOICE=onyx`)
 3. For coding missions, also set `CURSOR_API_KEY` and put a GitHub repo URL on the lane
 4. For analytics, set GA4 service-account credentials and a property id per lane
 5. For email→code, set Gmail OAuth vars (see below)
 6. `npm run dev` and click **Open uplink** on the command center
-7. Type, use **Mic** (Chrome/Edge): tap mic → speak → tap again to send, or enable **Ambient on** and say “Jarvis …” for always-on wake-word capture
+7. Click **Test voice** once to unlock audio, keep **Speak on**, then type or use **Mic** (Chrome/Edge)
 8. Ask the operator to start research/ops/draft/coding work — it should call `start_job` so the mission shows under **In flight**, then land in **Needs you** or **Recent** with an **Alerts** notification
 
 Operator tools:

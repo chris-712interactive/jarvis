@@ -28,6 +28,9 @@ type SpeechWindow = Window & {
 let voicesCache: SpeechSynthesisVoice[] | null = null;
 let voicesLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
 let speechUnlocked = false;
+let audioUnlocked = false;
+let currentAudio: HTMLAudioElement | null = null;
+let currentObjectUrl: string | null = null;
 
 export function getSpeechRecognitionConstructor() {
   if (typeof window === "undefined") return null;
@@ -203,6 +206,27 @@ export function extractWakeCommand(
 }
 
 export function stopSpeaking() {
+  if (currentAudio) {
+    try {
+      currentAudio.onended = null;
+      currentAudio.onerror = null;
+      currentAudio.pause();
+      currentAudio.removeAttribute("src");
+      currentAudio.load();
+    } catch {
+      // ignore
+    }
+    currentAudio = null;
+  }
+  if (currentObjectUrl) {
+    try {
+      URL.revokeObjectURL(currentObjectUrl);
+    } catch {
+      // ignore
+    }
+    currentObjectUrl = null;
+  }
+
   if (!isSpeechSynthesisSupported()) return;
   try {
     window.speechSynthesis.cancel();
@@ -211,6 +235,122 @@ export function stopSpeaking() {
   } catch {
     // ignore
   }
+}
+
+/** Tiny silent WAV so autoplay unlocks after a user gesture. */
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+
+/**
+ * Unlock HTMLAudioElement playback (needed for OpenAI TTS mp3).
+ * Call synchronously from a click/tap handler.
+ */
+export function unlockAudioPlayback() {
+  if (typeof window === "undefined" || typeof Audio === "undefined") return;
+  if (audioUnlocked) return;
+  try {
+    const probe = new Audio(SILENT_WAV);
+    probe.volume = 0.01;
+    const play = probe.play();
+    if (play && typeof play.then === "function") {
+      void play
+        .then(() => {
+          audioUnlocked = true;
+          try {
+            probe.pause();
+          } catch {
+            // ignore
+          }
+        })
+        .catch(() => {
+          // Autoplay still blocked — next Test voice / Speak toggle will retry.
+        });
+    } else {
+      audioUnlocked = true;
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function playAudioBlob(blob: Blob): Promise<void> {
+  if (typeof Audio === "undefined") {
+    return Promise.reject(new Error("This browser cannot play audio."));
+  }
+
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    currentObjectUrl = url;
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.preload = "auto";
+    audio.volume = 1;
+
+    let settled = false;
+    const finish = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (currentAudio === audio) currentAudio = null;
+      if (currentObjectUrl === url) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+        currentObjectUrl = null;
+      }
+      if (err) reject(err);
+      else resolve();
+    };
+
+    audio.onended = () => finish();
+    audio.onerror = () =>
+      finish(new Error("Audio playback failed (OpenAI TTS mp3)."));
+
+    const play = audio.play();
+    if (play && typeof play.then === "function") {
+      void play
+        .then(() => {
+          audioUnlocked = true;
+        })
+        .catch((error) => {
+          finish(
+            error instanceof Error
+              ? error
+              : new Error(
+                  "Audio play blocked — click Test voice once to unlock sound.",
+                ),
+          );
+        });
+    }
+  });
+}
+
+/**
+ * Prefer OpenAI TTS via /api/speak. Returns true if spoken, false if
+ * unavailable (so caller can fall back to browser speechSynthesis).
+ */
+async function speakWithOpenAi(text: string): Promise<boolean> {
+  const res = await fetch("/api/speak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+
+  if (res.status === 503) return false;
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(data?.error || `OpenAI TTS failed (${res.status})`);
+  }
+
+  const blob = await res.blob();
+  if (!blob.size) {
+    throw new Error("OpenAI TTS returned empty audio");
+  }
+  await playAudioBlob(blob);
+  return true;
 }
 
 function wait(ms: number) {
@@ -287,8 +427,10 @@ function pickVoice(voices: SpeechSynthesisVoice[]) {
 /**
  * Must run synchronously inside a click/tap handler.
  * Resumes Chrome's often-stuck paused state, loads voices, and primes TTS.
+ * Also unlocks HTMLAudioElement for OpenAI TTS playback.
  */
 export function unlockSpeechSynthesis() {
+  unlockAudioPlayback();
   if (!isSpeechSynthesisSupported()) return;
   try {
     void loadSpeechVoices();
@@ -318,6 +460,7 @@ export function unlockSpeechSynthesis() {
  * Call this from click handlers before any await.
  */
 export function primeSpeechSynthesis() {
+  unlockAudioPlayback();
   if (!isSpeechSynthesisSupported()) return;
   unlockSpeechSynthesis();
 }
@@ -495,20 +638,34 @@ async function voicesForSpeak() {
 }
 
 /**
- * Speak text via browser TTS.
+ * Speak text — prefers OpenAI TTS (`/api/speak`), falls back to browser
+ * speechSynthesis when the API key is missing or OpenAI fails.
  * Call unlockSpeechSynthesis()/primeSpeechSynthesis() from the click handler
  * before any await when possible (Test voice / Speak toggle).
  */
 export async function speakText(
   text: string,
-  options: { forceDefaultVoice?: boolean } = {},
+  options: { forceDefaultVoice?: boolean; forceBrowser?: boolean } = {},
 ): Promise<void> {
-  if (!isSpeechSynthesisSupported()) {
-    throw new Error("This browser has no speechSynthesis (try Chrome or Edge).");
-  }
-
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return;
+
+  stopSpeaking();
+
+  if (!options.forceBrowser) {
+    try {
+      const spoken = await speakWithOpenAi(clean.slice(0, 4096));
+      if (spoken) return;
+    } catch (error) {
+      console.warn("[speak] OpenAI TTS failed; falling back to browser", error);
+    }
+  }
+
+  if (!isSpeechSynthesisSupported()) {
+    throw new Error(
+      "No speech available — set OPENAI_API_KEY for OpenAI TTS, or use Chrome/Edge browser speech.",
+    );
+  }
 
   // Sync voice pick when possible so the first speak() can run in this turn.
   let voices = window.speechSynthesis.getVoices();

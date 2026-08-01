@@ -44,7 +44,7 @@ One replica only — SQLite does not like multiple writers.
 
 | Var | Required | Notes |
 |---|---|---|
-| `OPENAI_API_KEY` | yes (for chat) | Uplink + drafts + briefing polish |
+| `OPENAI_API_KEY` | yes (for chat) | Uplink + drafts + briefing polish + Speak TTS |
 | `CRON_SECRET` | **yes in production** | `openssl rand -hex 32` |
 | `JARVIS_DB_PATH` | yes with volume | `/data/jarvis.db` |
 | `BRIEFING_TZ` | recommended | IANA timezone, e.g. `America/Chicago` (not `CST`) |
@@ -133,7 +133,9 @@ Copy `apps/web/.env.example` → production env. Minimum useful set:
 
 | Var | Purpose |
 |---|---|
-| `OPENAI_API_KEY` | Chat + drafted notes + briefing polish |
+| `OPENAI_API_KEY` | Chat + drafted notes + briefing polish + Speak (OpenAI TTS) |
+| `OPENAI_TTS_MODEL` | Optional Speak model (default `tts-1`) |
+| `OPENAI_TTS_VOICE` | Optional Speak voice (default `onyx`) |
 | `CURSOR_API_KEY` | Code jobs → Cloud Agents |
 | `CRON_SECRET` | Protects `/api/cron/*` (required in production) |
 | `BRIEFING_TZ` | Operator timezone for morning/evening windows |
