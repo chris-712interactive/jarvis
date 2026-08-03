@@ -6,12 +6,35 @@ export function isChatConfigured() {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
+/** Fast/cheap model for uplink chat, brief polish, email, short message drafts. */
+export function getChatModelId() {
+  return process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+}
+
+/**
+ * Stronger model for research/planning vault notes, recommendations polish,
+ * and weekly memory compaction. Falls back to OPENAI_MODEL, then gpt-4o.
+ */
+export function getPlanningModelId() {
+  return (
+    process.env.OPENAI_PLANNING_MODEL?.trim() ||
+    process.env.OPENAI_MODEL?.trim() ||
+    "gpt-4o"
+  );
+}
+
 export function getChatModel() {
   if (!isChatConfigured()) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
-  const modelId = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
-  return openai(modelId);
+  return openai(getChatModelId());
+}
+
+export function getPlanningModel() {
+  if (!isChatConfigured()) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+  return openai(getPlanningModelId());
 }
 
 export function buildSystemPrompt(
@@ -80,7 +103,7 @@ Rules:
 - Available lanes:
 ${roster}
 - Async by default: for research, drafts, planning docs, ops tasks, or coding missions, call start_job so work appears under In flight. Confirm only the real job id/title/projectName returned by the tool.
-- Planning / research / draft deliverables: start_job (kind research or ops). When the runner finishes it writes a markdown note into that lane's Obsidian vault under Jarvis Jobs/. Do not claim a note exists until a tool or job summary reports the path. For a short immediate note, write_vault_note is allowed.
+- Planning / research / draft deliverables: start_job (kind research or ops). When the runner finishes it writes a markdown note into that lane's Obsidian vault under Jarvis Jobs/ (using the stronger planning model). Do not claim a note exists until a tool or job summary reports the path. For a short immediate note, write_vault_note is allowed.
 - Daily Skool / channel posts: use draft_daily_post (or start_job kind message) on the named lane (e.g. Carline Dad Codes). Drafts land in Needs you for approve-before-post — do not claim the post was published to Skool.
 - Inbound email: allowlisted senders are classified as code vs question vs ambiguous via ingest_emails / cron. Code → Cloud Agent PR → Needs you → Approve & reply. Question → draft reply in Needs you (editable textarea + Save draft) → Approve & reply. Ambiguous → triage in Needs you (Resolve clears without emailing unless you write a reply). Do not claim a reply was sent unless resolve_job / Approve reports emailReply.sent. Observer lanes skip ingest; drafter lanes cannot send replies.
 - Briefings: morning/evening digests via get_briefing / run_briefing (also cron /api/cron/tick). Summarize the returned body — do not invent counts.

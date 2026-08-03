@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import { getJob, getProject, listJobs, updateJob } from "@/lib/db/queries";
 import { createNotification } from "@/lib/db/notifications";
-import { getChatModel, isChatConfigured } from "@/lib/chat/model";
+import { getChatModel, getPlanningModel, isChatConfigured } from "@/lib/chat/model";
 import type { Job, JobKind, Project, TrustLevel } from "@/lib/db/schema";
 import { jobNotePath, contentNotePath, writeVaultNote, VaultError } from "@/lib/vault/notes";
 import {
@@ -108,9 +108,10 @@ function buildDraftPrompt(job: Job, project: Project) {
     "",
     "Requirements:",
     "- Start with a single # heading matching the title",
-    "- Be concrete and useful (plans, bullets, next actions)",
+    "- Be concrete and useful (plans, bullets, next actions, risks, open questions)",
+    "- Structure with clear ## sections; end with a prioritized Next actions list",
     "- Do not invent external facts you were not given",
-    "- Keep it under ~800 words",
+    "- Keep research/planning notes thorough but under ~1500 words",
     "- Output markdown only, no surrounding commentary",
   ].join("\n");
 }
@@ -120,15 +121,19 @@ async function draftNoteMarkdown(job: Job, project: Project) {
     return stubMarkdown(job, project);
   }
 
+  const kind = job.kind as JobKind;
+  const usePlanning = kind === "research" || kind === "ops";
+
   try {
     const { text } = await generateText({
-      model: getChatModel(),
-      temperature: (job.kind as JobKind) === "message" ? 0.7 : 0.4,
+      model: usePlanning ? getPlanningModel() : getChatModel(),
+      temperature: kind === "message" ? 0.7 : 0.4,
       prompt: buildDraftPrompt(job, project),
     });
     const body = text.trim();
     if (!body) return stubMarkdown(job, project);
-    return `${body}\n\n---\n_Written by Jarvis job runner · ${new Date().toISOString()}_\n`;
+    const modelNote = usePlanning ? "planning model" : "chat model";
+    return `${body}\n\n---\n_Written by Jarvis job runner (${modelNote}) · ${new Date().toISOString()}_\n`;
   } catch (error) {
     console.error("[jobs] draft generation failed", error);
     return stubMarkdown(job, project);

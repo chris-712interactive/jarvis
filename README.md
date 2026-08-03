@@ -34,7 +34,7 @@ Project Hub + dashboard shell in `apps/web`:
 ### Chat + async jobs (Phase 2–3 + 5)
 
 1. Copy `apps/web/.env.example` → `apps/web/.env.local`
-2. Set `OPENAI_API_KEY` (also powers Speak via OpenAI TTS; optional `OPENAI_TTS_VOICE=onyx`)
+2. Set `OPENAI_API_KEY` (also powers Speak via OpenAI TTS; optional `OPENAI_TTS_VOICE=onyx`). Optional: `OPENAI_MODEL` (chat/drafts, default `gpt-4o-mini`) and `OPENAI_PLANNING_MODEL` (research/ops notes + weekly reviews, default `gpt-4o`)
 3. For coding missions, also set `CURSOR_API_KEY` and put a GitHub repo URL on the lane
 4. For analytics, set GA4 service-account credentials and a property id per lane
 5. For email→code, set Gmail OAuth vars (see below)
@@ -65,8 +65,8 @@ Operator tools:
 8. Hub **Live environments** strip polls `/api/deploy/overview` every 60s
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
-- `research` / `ops` → draft a markdown note into the lane vault under `Jarvis Jobs/` (OpenAI draft when keyed; otherwise a stub), then **done** + notification
-- `message` → draft channel/Skool copy under `Content/<channel>/`, then **Needs you** (approve-before-post)
+- `research` / `ops` → draft a markdown note into the lane vault under `Jarvis Jobs/` (planning model when keyed; otherwise a stub), then **done** + notification
+- `message` → draft channel/Skool copy under `Content/<channel>/` (chat model), then **Needs you** (approve-before-post)
 - `code` → launch a Cursor Cloud Agent against the lane’s GitHub repo (`CURSOR_API_KEY` required; repo must be connected in Cursor Integrations). Job stays **In flight** while the agent runs, then **done** (with PR link when available) or **needs_you** / **failed**. Email-originated code jobs finish as **Needs you** so you Approve before Jarvis replies.
 - Missing vault path (non-code) or missing API key / repo URL (code) → **Needs you** with a configure message
 

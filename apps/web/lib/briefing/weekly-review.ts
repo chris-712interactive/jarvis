@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 
-import { getChatModel, isChatConfigured } from "@/lib/chat/model";
+import { getPlanningModel, isChatConfigured } from "@/lib/chat/model";
 import {
   createNotification,
   listNotifications,
@@ -170,7 +170,7 @@ async function llmPolish(weekKey: string, facts: string) {
   if (!isChatConfigured()) return facts;
   try {
     const { text } = await generateText({
-      model: getChatModel(),
+      model: getPlanningModel(),
       temperature: 0.35,
       prompt: [
         "You write a weekly operator review for Jarvis (personal command center).",
@@ -223,7 +223,7 @@ async function llmCompactLane(input: {
 
   try {
     const { text } = await generateText({
-      model: getChatModel(),
+      model: getPlanningModel(),
       temperature: 0.3,
       prompt: [
         "Write a compacted Memory/<slug>/Current.md note for one project lane.",

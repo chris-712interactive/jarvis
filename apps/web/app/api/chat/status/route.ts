@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
-import { isChatConfigured } from "@/lib/chat/model";
+import {
+  getChatModelId,
+  getPlanningModelId,
+  isChatConfigured,
+} from "@/lib/chat/model";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const configured = isChatConfigured();
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  const chatModel = getChatModelId();
+  const planningModel = getPlanningModelId();
   return NextResponse.json({
     configured,
-    model,
+    /** @deprecated Prefer `chatModel` — kept for older uplink clients. */
+    model: chatModel,
+    chatModel,
+    planningModel,
     hint: configured
       ? null
       : "Add OPENAI_API_KEY to apps/web/.env.local and restart npm run dev.",

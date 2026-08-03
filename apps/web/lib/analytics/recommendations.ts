@@ -12,7 +12,7 @@ import {
   isGscConfigured,
   type GscSiteSummary,
 } from "@/lib/analytics/gsc";
-import { getChatModel, isChatConfigured } from "@/lib/chat/model";
+import { getPlanningModel, isChatConfigured } from "@/lib/chat/model";
 import type { JobKind, Project } from "@/lib/db/schema";
 import {
   recommendationsNotePath,
@@ -665,7 +665,7 @@ async function polishWithLlm(input: {
 
   try {
     const { text } = await generateText({
-      model: getChatModel(),
+      model: getPlanningModel(),
       temperature: 0.35,
       prompt: [
         "You are a senior growth + SEO operator for Jarvis.",
