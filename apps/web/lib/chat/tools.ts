@@ -174,6 +174,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             deployStatusDetail: p.deployStatusDetail,
             deployCheckedAt: p.deployCheckedAt,
             contentChannel: p.contentChannel,
+            instagramUserId: p.instagramUserId,
             dailyContent: p.dailyContent,
             emailSenders: p.emailSenders,
             needsYou: p.needsYou,
@@ -248,6 +249,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
             deployStatusDetail: project.deployStatusDetail,
             deployCheckedAt: project.deployCheckedAt,
             contentChannel: project.contentChannel,
+            instagramUserId: project.instagramUserId,
             contentBrief: project.contentBrief,
             dailyContent: project.dailyContent,
             emailSenders: project.emailSenders,
@@ -350,7 +352,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     resolve_job: tool({
       description:
-        "Mark a priority job as approved/done so it leaves Needs you. For email drafts, pass replyDraft to edit the reply before send. Prefer jobId from list_jobs / get_dashboard_status; title match is a fallback.",
+        "Mark a priority job as approved/done so it leaves Needs you. For email drafts, pass replyDraft to edit the reply before send. For Instagram packs with API configured, Approve publishes via Graph API (see contentPublish in the result). Prefer jobId from list_jobs / get_dashboard_status; title match is a fallback.",
       inputSchema: z.object({
         jobId: z.string().optional().describe("Exact job id when known"),
         title: z
@@ -417,9 +419,12 @@ export function createOperatorTools(activeProjectId?: string | null) {
                 summary: resolved.job.summary,
                 emailFrom: resolved.job.emailFrom,
                 emailReplySent: resolved.job.emailReplySent,
+                mediaPath: resolved.job.mediaPath,
+                contentPublished: resolved.job.contentPublished,
               }
             : null,
           emailReply: resolved?.emailReply ?? null,
+          contentPublish: resolved?.contentPublish ?? null,
           trustLevel: project ? projectTrust(project) : null,
         };
       },
@@ -581,7 +586,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           note:
             codeNote ??
             (active.kind === "message"
-              ? `Message draft is in flight on lane "${project.name}". It will land in Needs you with a Content/ note to copy into ${project.contentChannel || "the channel"}.`
+              ? `Message draft is in flight on lane "${project.name}". It will land in Needs you with a Content/ pack (caption${ /instagram|ig|insta/i.test(project.contentChannel || "") ? " + image" : ""} for ${project.contentChannel || "the channel"}).`
               : project.vaultPath
                 ? `Job is in flight on lane "${project.name}". When finished, a markdown note is written under Jarvis Jobs/ in that lane's vault.`
                 : `Job is in flight on lane "${project.name}", but that lane has no vault path — set one or the job will need you when it tries to write the note.`),
@@ -1116,7 +1121,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
 
     draft_daily_post: tool({
       description:
-        "Queue a daily content draft (kind message) for a lane — used for Skool / channel posts. Draft lands in Needs you for approve-before-post. Prefer lane=Carline Dad Codes when named.",
+        "Queue a daily content draft (kind message) for a lane — used for Skool / Instagram / channel posts. Instagram channels also generate an image pack. Draft lands in Needs you for approve-before-post (or Approve & publish when Instagram API is configured).",
       inputSchema: z.object({
         ...laneFields,
         force: z
@@ -1156,7 +1161,7 @@ export function createOperatorTools(activeProjectId?: string | null) {
           ...result,
           note:
             result.queued.length > 0
-              ? `Draft job queued on "${resolved.project.name}". Watch In flight, then Needs you — copy into ${resolved.project.contentChannel || "the channel"} and Approve/Resolve.`
+              ? `Draft job queued on "${resolved.project.name}". Watch In flight, then Needs you — copy the Content/ pack into ${resolved.project.contentChannel || "the channel"} (or Approve & publish for Instagram when configured).`
               : result.skipped[0]?.reason || "Nothing queued.",
         };
       },

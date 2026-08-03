@@ -70,6 +70,7 @@ export type CreateProjectInput = {
   contentChannel?: string | null;
   contentBrief?: string;
   dailyContent?: boolean;
+  instagramUserId?: string | null;
   emailSenders?: string;
   interruptLevel?: InterruptLevel;
   trustLevel?: TrustLevel;
@@ -105,6 +106,7 @@ export async function createProject(input: CreateProjectInput) {
     contentChannel: input.contentChannel?.trim() || null,
     contentBrief: input.contentBrief?.trim() ?? "",
     dailyContent: Boolean(input.dailyContent),
+    instagramUserId: input.instagramUserId?.trim() || null,
     emailSenders: input.emailSenders?.trim() ?? "",
     interruptLevel: input.interruptLevel ?? "digest",
     trustLevel: input.trustLevel ?? "operator",
@@ -182,6 +184,10 @@ export async function updateProject(id: string, input: UpdateProjectInput) {
       input.dailyContent !== undefined
         ? Boolean(input.dailyContent)
         : existing.dailyContent,
+    instagramUserId:
+      input.instagramUserId !== undefined
+        ? input.instagramUserId?.trim() || null
+        : existing.instagramUserId,
     emailSenders:
       input.emailSenders !== undefined
         ? input.emailSenders.trim()
@@ -256,6 +262,10 @@ export type CreateJobInput = {
   emailSubject?: string | null;
   emailReplyDraft?: string | null;
   emailReplySent?: boolean;
+  mediaPath?: string | null;
+  contentCaption?: string | null;
+  mediaToken?: string | null;
+  contentPublished?: boolean;
   interruptLevel?: InterruptLevel;
 };
 
@@ -279,6 +289,10 @@ export async function createJob(input: CreateJobInput) {
     emailSubject: input.emailSubject?.trim() || null,
     emailReplyDraft: input.emailReplyDraft?.trim() || null,
     emailReplySent: Boolean(input.emailReplySent),
+    mediaPath: input.mediaPath?.trim() || null,
+    contentCaption: input.contentCaption?.trim() || null,
+    mediaToken: input.mediaToken?.trim() || null,
+    contentPublished: Boolean(input.contentPublished),
     interruptLevel: input.interruptLevel ?? "digest",
     createdAt: now,
     updatedAt: now,
@@ -302,6 +316,10 @@ export type UpdateJobInput = {
   emailSubject?: string | null;
   emailReplyDraft?: string | null;
   emailReplySent?: boolean;
+  mediaPath?: string | null;
+  contentCaption?: string | null;
+  mediaToken?: string | null;
+  contentPublished?: boolean;
   interruptLevel?: InterruptLevel;
 };
 
@@ -353,6 +371,22 @@ export async function updateJob(id: string, input: UpdateJobInput) {
       input.emailReplySent !== undefined
         ? Boolean(input.emailReplySent)
         : existing.emailReplySent,
+    mediaPath:
+      input.mediaPath !== undefined
+        ? input.mediaPath?.trim() || null
+        : existing.mediaPath,
+    contentCaption:
+      input.contentCaption !== undefined
+        ? input.contentCaption?.trim() || null
+        : existing.contentCaption,
+    mediaToken:
+      input.mediaToken !== undefined
+        ? input.mediaToken?.trim() || null
+        : existing.mediaToken,
+    contentPublished:
+      input.contentPublished !== undefined
+        ? Boolean(input.contentPublished)
+        : existing.contentPublished,
     interruptLevel: input.interruptLevel ?? existing.interruptLevel,
     updatedAt: new Date(),
   };

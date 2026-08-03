@@ -44,9 +44,12 @@ One replica only — SQLite does not like multiple writers.
 
 | Var | Required | Notes |
 |---|---|---|
-| `OPENAI_API_KEY` | yes (for chat) | Uplink + drafts + briefing polish + Speak TTS |
+| `OPENAI_API_KEY` | yes (for chat) | Uplink + drafts + briefing polish + Speak TTS + Instagram image packs |
 | `OPENAI_MODEL` | no | Chat / polish / short drafts (default `gpt-4o-mini`) |
 | `OPENAI_PLANNING_MODEL` | no | Research/ops planning notes, weekly reviews, recommendation polish (default `gpt-4o`; falls back to `OPENAI_MODEL`) |
+| `OPENAI_IMAGE_MODEL` | no | Visual content packs (default `dall-e-3`) |
+| `INSTAGRAM_ACCESS_TOKEN` | no | Meta Page token for Approve & publish (also `META_ACCESS_TOKEN`) |
+| `JARVIS_PUBLIC_URL` | for IG publish | Public HTTPS origin so Meta can fetch generated images |
 | `CRON_SECRET` | **yes in production** | `openssl rand -hex 32` |
 | `JARVIS_DB_PATH` | yes with volume | `/data/jarvis.db` |
 | `BRIEFING_TZ` | recommended | IANA timezone, e.g. `America/Chicago` (not `CST`) |
@@ -135,9 +138,12 @@ Copy `apps/web/.env.example` → production env. Minimum useful set:
 
 | Var | Purpose |
 |---|---|
-| `OPENAI_API_KEY` | Chat + drafted notes + briefing polish + Speak (OpenAI TTS) |
+| `OPENAI_API_KEY` | Chat + drafted notes + briefing polish + Speak (OpenAI TTS) + image packs |
 | `OPENAI_MODEL` | Chat / polish / short drafts (default `gpt-4o-mini`) |
 | `OPENAI_PLANNING_MODEL` | Research/ops planning notes, weekly reviews, recommendation polish (default `gpt-4o`) |
+| `OPENAI_IMAGE_MODEL` | Instagram/visual content packs (default `dall-e-3`) |
+| `INSTAGRAM_ACCESS_TOKEN` | Meta Graph token for Instagram Approve & publish |
+| `JARVIS_PUBLIC_URL` | Public HTTPS origin for Meta image fetch during publish |
 | `OPENAI_TTS_MODEL` | Optional Speak model (default `tts-1`) |
 | `OPENAI_TTS_VOICE` | Optional Speak voice (default `onyx`) |
 | `CURSOR_API_KEY` | Code jobs → Cloud Agents |

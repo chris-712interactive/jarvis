@@ -298,7 +298,8 @@ Write answers to:
 ### Phase 6 — Content + analytics ✅ (draft + GA4 reads)
 
 - Daily Skool/channel drafts per lane (`dailyContent`, `contentChannel`, `contentBrief`)
-- Approve-before-post via **Needs you** (no Skool auto-publish yet)
+- Instagram visual packs (`contentChannel=instagram`) — caption + OpenAI image under `Content/instagram/`
+- Approve-before-post via **Needs you**; optional Meta Graph **Approve & publish** (`INSTAGRAM_ACCESS_TOKEN` + lane `instagramUserId` + `JARVIS_PUBLIC_URL`)
 - GA4 read adapter (`gaPropertyId` + service account) for “what’s working” per lane
 - Search Console deep dive + **goal-aligned recommendations** (`get_lane_recommendations`)
 - Cron endpoint `/api/cron/daily-content`
@@ -316,7 +317,7 @@ Write answers to:
 - Proactive digests (“morning briefing”) ✅
 - Memory compaction / weekly project reviews ✅ (`Memory/<slug>/Current.md` + `Jarvis Jobs/reviews/`)
 - Mobile-first PWA
-- Skool/community auto-publish if/when a safe API exists
+- Broader social auto-publish beyond Instagram Graph (Skool, etc.) when safe APIs exist
 - Watchdogs for CI / deploys ✅
 
 Ship each phase usable alone. Do not wait for wake-word Jarvis before the hub is real.

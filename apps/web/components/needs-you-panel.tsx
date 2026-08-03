@@ -7,6 +7,13 @@ import type { Job, Project } from "@/lib/db/schema";
 
 type JobWithProject = Job & { project: Project | null };
 
+function isInstagramChannel(channel: string | null | undefined) {
+  const c = (channel ?? "").trim().toLowerCase();
+  return (
+    c === "instagram" || c === "ig" || c === "insta" || c === "instagram.com"
+  );
+}
+
 function StatusChip() {
   return (
     <span
@@ -109,9 +116,12 @@ export function NeedsYouSection({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "Could not resolve job");
+      }
+      if (data?.contentPublish?.error) {
+        setError(data.contentPublish.error);
       }
       router.refresh();
     } catch (err) {
@@ -122,7 +132,10 @@ export function NeedsYouSection({
   }
 
   return (
-    <section id="needs-you" className="mx-auto w-full max-w-[1400px] px-5 py-16 sm:px-8">
+    <section
+      id="needs-you"
+      className="mx-auto w-full max-w-[1400px] px-5 py-16 sm:px-8"
+    >
       <div className="mb-8 flex items-end justify-between gap-4 border-b border-beam/15 pb-4">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-signal">
@@ -133,7 +146,8 @@ export function NeedsYouSection({
           </h2>
         </div>
         <p className="hidden max-w-sm text-right text-sm text-ink-soft sm:block">
-          Edit email drafts here before Approve & reply.
+          Edit email drafts before Approve &amp; reply. Instagram packs: Approve
+          &amp; publish when API is configured.
         </p>
       </div>
 
@@ -147,13 +161,17 @@ export function NeedsYouSection({
             all clear
           </p>
           <p className="mt-2 max-w-lg text-ink-soft">
-            Failures and decision points surface here the moment they require you.
+            Failures and decision points surface here the moment they require
+            you.
           </p>
         </div>
       ) : (
         <ul className="space-y-3">
           {projects.map((project) => (
-            <li key={`p-${project.id}`} className="hud-frame hud-frame-signal px-4 py-4 sm:px-5">
+            <li
+              key={`p-${project.id}`}
+              className="hud-frame hud-frame-signal px-4 py-4 sm:px-5"
+            >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-3">
                   <StatusChip />
@@ -190,8 +208,17 @@ export function NeedsYouSection({
               Boolean(job.emailFrom) && !job.emailReplySent;
             const draftValue = drafts[job.id] ?? job.emailReplyDraft ?? "";
             const hasDraft = Boolean(draftValue.trim());
+            const canPublishIg =
+              job.kind === "message" &&
+              !job.contentPublished &&
+              Boolean(job.mediaPath) &&
+              isInstagramChannel(job.project?.contentChannel) &&
+              Boolean(job.project?.instagramUserId?.trim());
             return (
-              <li key={`j-${job.id}`} className="hud-frame hud-frame-signal px-4 py-4 sm:px-5">
+              <li
+                key={`j-${job.id}`}
+                className="hud-frame hud-frame-signal px-4 py-4 sm:px-5"
+              >
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3">
@@ -224,6 +251,14 @@ export function NeedsYouSection({
                                 : " · add a reply or resolve without email"}
                           </p>
                         ) : null}
+                        {job.mediaPath ? (
+                          <p className="mt-2 font-mono text-[11px] text-ink-soft">
+                            pack // {job.artifactUrl || "note"}
+                            {" · "}
+                            {job.mediaPath}
+                            {job.contentPublished ? " · published" : ""}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 pl-5 sm:pl-0">
@@ -234,23 +269,33 @@ export function NeedsYouSection({
                         <button
                           type="button"
                           onClick={() => void saveDraft(job.id)}
-                          disabled={pendingId === `save-${job.id}` || pendingId === `j-${job.id}`}
+                          disabled={
+                            pendingId === `save-${job.id}` ||
+                            pendingId === `j-${job.id}`
+                          }
                           className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
                         >
-                          {pendingId === `save-${job.id}` ? "…" : "Save draft"}
+                          {pendingId === `save-${job.id}`
+                            ? "…"
+                            : "Save draft"}
                         </button>
                       ) : null}
                       <button
                         type="button"
                         onClick={() => void resolveJob(job)}
-                        disabled={pendingId === `j-${job.id}` || pendingId === `save-${job.id}`}
+                        disabled={
+                          pendingId === `j-${job.id}` ||
+                          pendingId === `save-${job.id}`
+                        }
                         className="btn-ghost !px-3 !py-1.5 !text-[10px] uppercase tracking-[0.16em] disabled:opacity-50"
                       >
                         {pendingId === `j-${job.id}`
                           ? "…"
                           : canEditReply && hasDraft
                             ? "Approve & reply"
-                            : "Resolve"}
+                            : canPublishIg
+                              ? "Approve & publish"
+                              : "Resolve"}
                       </button>
                     </div>
                   </div>

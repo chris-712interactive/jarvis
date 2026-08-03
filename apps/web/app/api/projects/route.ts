@@ -38,6 +38,7 @@ export async function POST(request: Request) {
     contentChannel: parsed.data.contentChannel ?? null,
     contentBrief: parsed.data.contentBrief ?? "",
     dailyContent: parsed.data.dailyContent ?? false,
+    instagramUserId: parsed.data.instagramUserId ?? null,
     emailSenders: parsed.data.emailSenders ?? "",
   });
 

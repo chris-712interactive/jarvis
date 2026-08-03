@@ -2,8 +2,10 @@ import { generateText } from "ai";
 import { getJob, getProject, listJobs, updateJob } from "@/lib/db/queries";
 import { createNotification } from "@/lib/db/notifications";
 import { getChatModel, getPlanningModel, isChatConfigured } from "@/lib/chat/model";
+import { isVisualContentChannel } from "@/lib/content/channels";
+import { writeMessageContentPack } from "@/lib/content/pack";
 import type { Job, JobKind, Project, TrustLevel } from "@/lib/db/schema";
-import { jobNotePath, contentNotePath, writeVaultNote, VaultError } from "@/lib/vault/notes";
+import { jobNotePath, writeVaultNote, VaultError } from "@/lib/vault/notes";
 import {
   createCloudAgent,
   CursorAgentError,
@@ -31,29 +33,6 @@ import {
 const MIN_RUNNING_MS = 8000;
 
 function stubMarkdown(job: Job, project: Project) {
-  const channel = project.contentChannel?.trim();
-  if ((job.kind as JobKind) === "message") {
-    return [
-      `# ${job.title}`,
-      "",
-      `> Lane: **${project.name}** · Channel: **${channel || "content"}** · Job \`${job.id}\``,
-      "",
-      "## Ready to post",
-      "",
-      job.brief.trim() || "(no brief — set OPENAI_API_KEY for a drafted post)",
-      "",
-      "## Checklist",
-      "",
-      "- [ ] Copy into Skool / channel",
-      "- [ ] Post",
-      "- [ ] Approve/Resolve this job in Jarvis",
-      "",
-      "---",
-      `_Drafted by Jarvis · ${new Date().toISOString()}_`,
-      "",
-    ].join("\n");
-  }
-
   return [
     `# ${job.title}`,
     "",
@@ -75,30 +54,6 @@ function stubMarkdown(job: Job, project: Project) {
 }
 
 function buildDraftPrompt(job: Job, project: Project) {
-  if ((job.kind as JobKind) === "message") {
-    const channel = project.contentChannel?.trim() || "community";
-    return [
-      `You are drafting a ready-to-publish ${channel} post for lane "${project.name}".`,
-      project.goal?.trim() ? `Lane goal: ${project.goal.trim()}` : null,
-      project.contentBrief?.trim()
-        ? `Standing content brief:\n${project.contentBrief.trim()}`
-        : null,
-      `Job title: ${job.title}`,
-      `Operator brief:`,
-      job.brief.trim() || job.title,
-      "",
-      "Requirements:",
-      "- Start with a single # heading (post title)",
-      "- Then a ## Ready to post section containing the exact copy to paste into the channel",
-      "- Keep the post concise and on-brand; no hashtag spam",
-      "- Do not invent metrics, quotes, or external facts",
-      "- End with a short ## Checklist (copy, post, approve in Jarvis)",
-      "- Output markdown only",
-    ]
-      .filter(Boolean)
-      .join("\n");
-  }
-
   return [
     `Write an Obsidian markdown note for project lane "${project.name}".`,
     `Job title: ${job.title}`,
@@ -127,7 +82,7 @@ async function draftNoteMarkdown(job: Job, project: Project) {
   try {
     const { text } = await generateText({
       model: usePlanning ? getPlanningModel() : getChatModel(),
-      temperature: kind === "message" ? 0.7 : 0.4,
+      temperature: 0.4,
       prompt: buildDraftPrompt(job, project),
     });
     const body = text.trim();
@@ -141,6 +96,10 @@ async function draftNoteMarkdown(job: Job, project: Project) {
 }
 
 async function writeJobArtifact(job: Job, project: Project) {
+  if ((job.kind as JobKind) === "message") {
+    return writeMessageContentPack(job, project);
+  }
+
   if (!project.vaultPath) {
     return {
       ok: false as const,
@@ -150,10 +109,7 @@ async function writeJobArtifact(job: Job, project: Project) {
 
   try {
     const content = await draftNoteMarkdown(job, project);
-    const notePath =
-      (job.kind as JobKind) === "message"
-        ? contentNotePath(project.contentChannel, job.title)
-        : jobNotePath(job.title);
+    const notePath = jobNotePath(job.title);
     const note = writeVaultNote(project.vaultPath, notePath, content, {
       overwrite: true,
     });
@@ -161,6 +117,9 @@ async function writeJobArtifact(job: Job, project: Project) {
       ok: true as const,
       path: note.path,
       title: note.title,
+      mediaPath: null as string | null,
+      contentCaption: null as string | null,
+      mediaToken: null as string | null,
     };
   } catch (error) {
     const message =
@@ -228,12 +187,20 @@ function buildAgentPrompt(job: Job, project: Project) {
 async function needsYouJob(
   job: Job,
   summary: string,
-  extras?: { artifactUrl?: string | null },
+  extras?: {
+    artifactUrl?: string | null;
+    mediaPath?: string | null;
+    contentCaption?: string | null;
+    mediaToken?: string | null;
+  },
 ) {
   const updated = await updateJob(job.id, {
     status: "needs_you",
     summary,
     artifactUrl: extras?.artifactUrl,
+    mediaPath: extras?.mediaPath,
+    contentCaption: extras?.contentCaption,
+    mediaToken: extras?.mediaToken,
   });
   await createNotification({
     title: `Needs you: ${job.title}`,
@@ -495,8 +462,27 @@ async function finishVaultJob(job: Job) {
 
   if ((job.kind as JobKind) === "message") {
     const channel = project.contentChannel?.trim() || "channel";
-    const summary = `Draft ready for ${channel}. Note \`${artifact.path}\`. Copy/post manually, then Approve/Resolve.`;
-    return needsYouJob(job, summary, { artifactUrl: artifact.path });
+    const visual = isVisualContentChannel(channel);
+    const bits = [
+      `Draft ready for ${channel}.`,
+      `Note \`${artifact.path}\`.`,
+    ];
+    if (artifact.mediaPath) {
+      bits.push(`Image \`${artifact.mediaPath}\`.`);
+    } else if (visual) {
+      bits.push("No image generated.");
+    }
+    bits.push(
+      visual
+        ? "Copy caption + image (or Approve & publish when Instagram is configured)."
+        : "Copy/post manually, then Approve/Resolve.",
+    );
+    return needsYouJob(job, bits.join(" "), {
+      artifactUrl: artifact.path,
+      mediaPath: artifact.mediaPath,
+      contentCaption: artifact.contentCaption,
+      mediaToken: artifact.mediaToken,
+    });
   }
 
   const terminal = terminalStatusForSuccessfulJob({

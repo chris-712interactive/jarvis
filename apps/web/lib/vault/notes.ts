@@ -348,6 +348,82 @@ export function writeVaultNote(
   return readVaultNote(vaultPath, cleaned);
 }
 
+const BINARY_EXT = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+const MAX_BINARY_BYTES = 12_000_000;
+
+function normalizeBinaryRelativePath(relativePath: string) {
+  const cleaned = relativePath.replace(/^[/\\]+/, "").trim().replace(/\\/g, "/");
+  if (!cleaned) {
+    throw new VaultError("Media path is required", 400);
+  }
+  if (cleaned.includes("..")) {
+    throw new VaultError("Media path cannot contain ..", 400);
+  }
+  const ext = path.extname(cleaned).toLowerCase();
+  if (!BINARY_EXT.has(ext)) {
+    throw new VaultError("Only image media can be written (.png/.jpg/.webp/.gif)", 400);
+  }
+  return cleaned;
+}
+
+/**
+ * Write a binary asset (e.g. generated Instagram PNG) into the vault.
+ */
+export function writeVaultBinary(
+  vaultPath: string | null | undefined,
+  relativePath: string,
+  data: Buffer,
+  options?: { overwrite?: boolean },
+): { path: string; bytes: number } {
+  const root = ensureVaultDir(vaultPath);
+  const cleaned = normalizeBinaryRelativePath(relativePath);
+  const absolute = path.resolve(root, cleaned);
+  assertInsideVault(root, absolute);
+
+  if (data.byteLength > MAX_BINARY_BYTES) {
+    throw new VaultError(
+      `Media exceeds ${MAX_BINARY_BYTES} byte write limit`,
+      400,
+    );
+  }
+
+  const overwrite = options?.overwrite !== false;
+  if (!overwrite && fs.existsSync(absolute)) {
+    throw new VaultError("Media already exists", 409);
+  }
+
+  fs.mkdirSync(path.dirname(absolute), { recursive: true });
+  fs.writeFileSync(absolute, data);
+  return { path: cleaned, bytes: data.byteLength };
+}
+
+/** Read a binary vault asset for public media serving / publish. */
+export function readVaultBinary(
+  vaultPath: string | null | undefined,
+  relativePath: string,
+): { bytes: Buffer; mimeType: string; path: string } {
+  const root = ensureVaultDir(vaultPath);
+  const cleaned = normalizeBinaryRelativePath(relativePath);
+  const absolute = path.resolve(root, cleaned);
+  assertInsideVault(root, absolute);
+
+  if (!fs.existsSync(absolute)) {
+    throw new VaultError(`Media not found: ${cleaned}`, 404);
+  }
+
+  const bytes = fs.readFileSync(absolute);
+  const ext = path.extname(cleaned).toLowerCase();
+  const mimeType =
+    ext === ".jpg" || ext === ".jpeg"
+      ? "image/jpeg"
+      : ext === ".webp"
+        ? "image/webp"
+        : ext === ".gif"
+          ? "image/gif"
+          : "image/png";
+  return { bytes, mimeType, path: cleaned };
+}
+
 /** Build a safe relative path under Jarvis Jobs/ for async outputs. */
 export function jobNotePath(title: string, at = new Date()) {
   const stamp = at.toISOString().slice(0, 10);
@@ -419,4 +495,13 @@ export function contentNotePath(
     .replace(/^-|-$/g, "")
     .slice(0, 48) || "post";
   return `Content/${channelSlug}/${stamp}-${slug}.md`;
+}
+
+/** Sibling image path for a content note (same stem, .png). */
+export function contentMediaPathFromNote(notePath: string) {
+  const cleaned = notePath.replace(/\\/g, "/");
+  if (cleaned.toLowerCase().endsWith(".md")) {
+    return `${cleaned.slice(0, -3)}.png`;
+  }
+  return `${cleaned}.png`;
 }

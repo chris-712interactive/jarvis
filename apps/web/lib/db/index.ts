@@ -123,6 +123,9 @@ function migrateSchema(sqlite: DatabaseSync) {
       `ALTER TABLE projects ADD COLUMN trust_level TEXT NOT NULL DEFAULT 'operator'`,
     );
   }
+  if (!projectCols.some((column) => column.name === "instagram_user_id")) {
+    sqlite.exec(`ALTER TABLE projects ADD COLUMN instagram_user_id TEXT`);
+  }
 
   const jobCols = tableColumns(sqlite, "jobs");
   if (!jobCols.some((column) => column.name === "brief")) {
@@ -152,6 +155,20 @@ function migrateSchema(sqlite: DatabaseSync) {
   if (!jobCols.some((column) => column.name === "email_reply_sent")) {
     sqlite.exec(
       `ALTER TABLE jobs ADD COLUMN email_reply_sent INTEGER NOT NULL DEFAULT 0`,
+    );
+  }
+  if (!jobCols.some((column) => column.name === "media_path")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN media_path TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "content_caption")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN content_caption TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "media_token")) {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN media_token TEXT`);
+  }
+  if (!jobCols.some((column) => column.name === "content_published")) {
+    sqlite.exec(
+      `ALTER TABLE jobs ADD COLUMN content_published INTEGER NOT NULL DEFAULT 0`,
     );
   }
 
@@ -199,6 +216,7 @@ function createSqlite() {
       content_channel TEXT,
       content_brief TEXT NOT NULL DEFAULT '',
       daily_content INTEGER NOT NULL DEFAULT 0,
+      instagram_user_id TEXT,
       email_senders TEXT NOT NULL DEFAULT '',
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       trust_level TEXT NOT NULL DEFAULT 'operator',
@@ -223,6 +241,10 @@ function createSqlite() {
       email_subject TEXT,
       email_reply_draft TEXT,
       email_reply_sent INTEGER NOT NULL DEFAULT 0,
+      media_path TEXT,
+      content_caption TEXT,
+      media_token TEXT,
+      content_published INTEGER NOT NULL DEFAULT 0,
       interrupt_level TEXT NOT NULL DEFAULT 'digest',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL

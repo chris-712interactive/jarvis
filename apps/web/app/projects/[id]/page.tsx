@@ -237,6 +237,7 @@ export default async function ProjectDetailPage({ params }: Params) {
                   contentChannel: project.contentChannel ?? "",
                   contentBrief: project.contentBrief ?? "",
                   dailyContent: Boolean(project.dailyContent),
+                  instagramUserId: project.instagramUserId ?? "",
                   emailSenders: project.emailSenders ?? "",
                   interruptLevel: project.interruptLevel,
                   trustLevel: project.trustLevel,

@@ -67,6 +67,8 @@ export const projects = sqliteTable("projects", {
   dailyContent: integer("daily_content", { mode: "boolean" })
     .notNull()
     .default(false),
+  /** Instagram Business/Creator account id for Graph API publish. */
+  instagramUserId: text("instagram_user_id"),
   emailSenders: text("email_senders").notNull().default(""),
   interruptLevel: text("interrupt_level")
     .$type<InterruptLevel>()
@@ -99,6 +101,15 @@ export const jobs = sqliteTable("jobs", {
   emailSubject: text("email_subject"),
   emailReplyDraft: text("email_reply_draft"),
   emailReplySent: integer("email_reply_sent", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  /** Vault-relative path to generated post image (e.g. Content/instagram/….png). */
+  mediaPath: text("media_path"),
+  /** Caption text extracted for Instagram publish. */
+  contentCaption: text("content_caption"),
+  /** One-time token so Meta can fetch the image via /api/public/media. */
+  mediaToken: text("media_token"),
+  contentPublished: integer("content_published", { mode: "boolean" })
     .notNull()
     .default(false),
   interruptLevel: text("interrupt_level")

@@ -1,12 +1,20 @@
 import { getJob, getProject, updateJob } from "@/lib/db/queries";
 import { createNotification } from "@/lib/db/notifications";
+import { isInstagramChannel } from "@/lib/content/channels";
 import {
   GmailError,
   isGmailConfigured,
   sendReply,
 } from "@/lib/gmail/client";
+import {
+  canPublishInstagram,
+  getJarvisPublicUrl,
+  InstagramError,
+  publishInstagramImagePost,
+} from "@/lib/instagram/client";
 import type { Job } from "@/lib/db/schema";
 import {
+  canPublishContent,
   canSendEmailReply,
   projectTrust,
   trustDenialMessage,
@@ -54,10 +62,126 @@ export type ResolveJobResult = {
     skipped: boolean;
     error: string | null;
   };
+  contentPublish: {
+    attempted: boolean;
+    published: boolean;
+    skipped: boolean;
+    error: string | null;
+    mediaId: string | null;
+  };
 };
+
+async function tryPublishInstagram(
+  job: Job,
+  summary: string,
+): Promise<{
+  job: Job;
+  contentPublish: ResolveJobResult["contentPublish"];
+}> {
+  const contentPublish: ResolveJobResult["contentPublish"] = {
+    attempted: false,
+    published: false,
+    skipped: false,
+    error: null,
+    mediaId: null,
+  };
+
+  if (job.contentPublished) {
+    contentPublish.skipped = true;
+    return { job, contentPublish };
+  }
+
+  if (job.kind !== "message") {
+    contentPublish.skipped = true;
+    return { job, contentPublish };
+  }
+
+  const project = await getProject(job.projectId);
+  if (!project || !isInstagramChannel(project.contentChannel)) {
+    contentPublish.skipped = true;
+    return { job, contentPublish };
+  }
+
+  // Not fully configured → leave as manual copy/post resolve.
+  if (!canPublishInstagram(project)) {
+    contentPublish.skipped = true;
+    return { job, contentPublish };
+  }
+
+  if (!job.mediaPath || !job.mediaToken) {
+    contentPublish.skipped = true;
+    contentPublish.error =
+      "Instagram publish skipped — draft has no generated image yet.";
+    job =
+      (await updateJob(job.id, {
+        summary: `${summary} · ${contentPublish.error}`,
+      })) ?? job;
+    return { job, contentPublish };
+  }
+
+  if (!canPublishContent(project.trustLevel)) {
+    contentPublish.skipped = true;
+    contentPublish.error = trustDenialMessage(
+      projectTrust(project),
+      "publish to Instagram — promote lane trust to operator+",
+    );
+    job =
+      (await updateJob(job.id, {
+        summary: `${summary} · Publish blocked (${contentPublish.error})`,
+      })) ?? job;
+    return { job, contentPublish };
+  }
+
+  const publicBase = getJarvisPublicUrl();
+  const imageUrl = `${publicBase}/api/public/media/${encodeURIComponent(job.id)}?token=${encodeURIComponent(job.mediaToken)}`;
+  const caption =
+    job.contentCaption?.trim() ||
+    job.title.trim() ||
+    "Posted via Jarvis";
+
+  contentPublish.attempted = true;
+  try {
+    const published = await publishInstagramImagePost({
+      igUserId: project.instagramUserId!.trim(),
+      imageUrl,
+      caption,
+    });
+    contentPublish.published = true;
+    contentPublish.mediaId = published.mediaId;
+    job =
+      (await updateJob(job.id, {
+        contentPublished: true,
+        summary: `${summary} · Published to Instagram (media ${published.mediaId}).`,
+      })) ?? job;
+    await createNotification({
+      title: `Instagram published: ${job.title}`,
+      body: `Media id ${published.mediaId}. Caption from vault note ${job.artifactUrl || ""}.`,
+      level: "digest",
+      projectId: job.projectId,
+      jobId: job.id,
+    });
+  } catch (error) {
+    contentPublish.error =
+      error instanceof InstagramError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : "Instagram publish failed";
+    console.error("[resolve] Instagram publish failed", error);
+    // Keep in Needs you so the operator can fix credentials and retry.
+    job =
+      (await updateJob(job.id, {
+        status: "needs_you",
+        summary: `${summary} · Instagram publish failed: ${contentPublish.error}`,
+      })) ?? job;
+  }
+
+  return { job, contentPublish };
+}
 
 /**
  * Mark a job done and, for email-originated work with a reply body, send it.
+ * Instagram message jobs with API credentials publish on Approve.
  */
 export async function resolveJobWithSideEffects(
   jobId: string,
@@ -107,7 +231,17 @@ export async function resolveJobWithSideEffects(
         (await updateJob(job.id, {
           summary: `${summary} · No email reply sent (triage/clear only).`,
         })) ?? job;
-      return { job, emailReply };
+      return {
+        job,
+        emailReply,
+        contentPublish: {
+          attempted: false,
+          published: false,
+          skipped: true,
+          error: null,
+          mediaId: null,
+        },
+      };
     }
 
     if (!canSendEmailReply(project?.trustLevel)) {
@@ -120,7 +254,17 @@ export async function resolveJobWithSideEffects(
         (await updateJob(job.id, {
           summary: `${summary} · Reply not sent (${emailReply.error})`,
         })) ?? job;
-      return { job, emailReply };
+      return {
+        job,
+        emailReply,
+        contentPublish: {
+          attempted: false,
+          published: false,
+          skipped: true,
+          error: null,
+          mediaId: null,
+        },
+      };
     }
 
     emailReply.attempted = true;
@@ -163,7 +307,24 @@ export async function resolveJobWithSideEffects(
           })) ?? job;
       }
     }
+
+    return {
+      job,
+      emailReply,
+      contentPublish: {
+        attempted: false,
+        published: false,
+        skipped: true,
+        error: null,
+        mediaId: null,
+      },
+    };
   }
 
-  return { job, emailReply };
+  const published = await tryPublishInstagram(job, summary);
+  return {
+    job: published.job,
+    emailReply,
+    contentPublish: published.contentPublish,
+  };
 }

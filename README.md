@@ -21,7 +21,7 @@ Project Hub + dashboard shell in `apps/web`:
 - **GitHub read adapters** — repo summary + open PRs (`GITHUB_TOKEN` optional)
 - **Phase 3 async jobs** from chat → In flight → Needs you / Recent + in-app notifications
 - **Phase 5 coding workers** — `kind: code` jobs launch Cursor Cloud Agents (`CURSOR_API_KEY`)
-- **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; approve-before-post
+- **Daily content drafts** — Skool/channel posts via `draft_daily_post` / cron; Instagram channels also generate an image pack; approve-before-post (optional Approve & publish via Meta Graph API)
 - **GA4 lane analytics** — `get_lane_analytics` + `GET /api/projects/:id/analytics`
 - **Search Console SEO** — `get_lane_search` + `GET /api/projects/:id/search-console` (performance, device/country, sitemaps, URL Inspection)
 - **Lane recommendations** — `get_lane_recommendations` joins GA4 + GSC toward each lane goal (site + social action plan)
@@ -66,7 +66,7 @@ Operator tools:
 
 Local job runner (`POST /api/jobs/process`, also kicked on create and by the dashboard poller):
 - `research` / `ops` → draft a markdown note into the lane vault under `Jarvis Jobs/` (planning model when keyed; otherwise a stub), then **done** + notification
-- `message` → draft channel/Skool copy under `Content/<channel>/` (chat model), then **Needs you** (approve-before-post)
+- `message` → draft channel/Skool copy under `Content/<channel>/` (chat model); Instagram also generates a sibling `.png` image pack, then **Needs you** (approve-before-post / Approve & publish when Graph API is configured)
 - `code` → launch a Cursor Cloud Agent against the lane’s GitHub repo (`CURSOR_API_KEY` required; repo must be connected in Cursor Integrations). Job stays **In flight** while the agent runs, then **done** (with PR link when available) or **needs_you** / **failed**. Email-originated code jobs finish as **Needs you** so you Approve before Jarvis replies.
 - Missing vault path (non-code) or missing API key / repo URL (code) → **Needs you** with a configure message
 
@@ -82,14 +82,15 @@ Local job runner (`POST /api/jobs/process`, also kicked on create and by the das
    - **question** intent → draft reply in **Needs you** → **Approve & reply**
    - **ambiguous** → triage in **Needs you** (Resolve clears without emailing)
 
-### Daily Skool / content drafts
+### Daily Skool / Instagram / content drafts
 
-On a lane (e.g. **Carline Dad Codes**):
+On a lane (e.g. **Carline Dad Codes** or an Instagram brand lane):
 
-1. Set **Content channel** (`skool`), turn **Daily content drafts** on, set a **Content brief**, and point at a vault
-2. Ask the uplink to draft today’s post, or hit `GET/POST /api/cron/tick` / `daily-content` (set `CRON_SECRET` in production; send `Authorization: Bearer …`)
-3. Draft appears under **In flight** → **Needs you** with a vault note under `Content/skool/`
-4. Copy into Skool manually, then **Approve/Resolve**
+1. Set **Content channel** (`skool` or `instagram`), turn **Daily content drafts** on, set a **Content brief**, and point at a vault
+2. For Instagram auto-publish later: set **Instagram business account id** on the lane + Railway vars `INSTAGRAM_ACCESS_TOKEN` and `JARVIS_PUBLIC_URL`
+3. Ask the uplink to draft today’s post, or hit `GET/POST /api/cron/tick` / `daily-content` (set `CRON_SECRET` in production; send `Authorization: Bearer …`)
+4. Draft appears under **In flight** → **Needs you** with a vault note under `Content/<channel>/` (Instagram also writes a `.png` beside the note)
+5. Copy into the channel manually, or **Approve & publish** for Instagram when API credentials are set, then **Approve/Resolve**
 
 ### Scheduled tick + briefings
 

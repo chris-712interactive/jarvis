@@ -145,6 +145,11 @@ export function canSendEmailReply(trust: TrustLevel | null | undefined) {
   return trustAtLeast(trust, "operator");
 }
 
+/** Instagram / channel publish — operator+ only; never silent autopilot. */
+export function canPublishContent(trust: TrustLevel | null | undefined) {
+  return trustAtLeast(trust, "operator");
+}
+
 export function canLaunchCloudAgent(trust: TrustLevel | null | undefined) {
   return trustAtLeast(trust, "drafter");
 }
@@ -164,7 +169,7 @@ export function codeLaunchOptions(trust: TrustLevel | null | undefined): {
 
 /**
  * Terminal status after a successful worker run.
- * Message jobs always need_you (approve-before-post) until a publish channel exists.
+ * Message jobs always need_you (approve-before-post / approve-before-Instagram-publish).
  */
 export function terminalStatusForSuccessfulJob(input: {
   trust: TrustLevel | null | undefined;

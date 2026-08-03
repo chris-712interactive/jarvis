@@ -46,6 +46,7 @@ export async function PATCH(request: Request, { params }: Params) {
     contentChannel: parsed.data.contentChannel,
     contentBrief: parsed.data.contentBrief,
     dailyContent: parsed.data.dailyContent,
+    instagramUserId: parsed.data.instagramUserId,
     emailSenders: parsed.data.emailSenders,
   });
   if (!project) {

@@ -33,6 +33,7 @@ export function ProjectForm({
     contentChannel: string;
     contentBrief: string;
     dailyContent: boolean;
+    instagramUserId: string;
     emailSenders: string;
     interruptLevel: (typeof interrupts)[number];
     trustLevel: (typeof trustLevels)[number];
@@ -64,6 +65,7 @@ export function ProjectForm({
       contentChannel: String(form.get("contentChannel") ?? "") || null,
       contentBrief: String(form.get("contentBrief") ?? ""),
       dailyContent: String(form.get("dailyContent") ?? "false") === "true",
+      instagramUserId: String(form.get("instagramUserId") ?? "") || null,
       emailSenders: String(form.get("emailSenders") ?? ""),
       interruptLevel: String(form.get("interruptLevel") ?? "digest"),
       trustLevel: String(form.get("trustLevel") ?? "operator"),
@@ -257,7 +259,7 @@ export function ProjectForm({
             name="contentChannel"
             defaultValue={initial?.contentChannel}
             className={fieldClass}
-            placeholder="skool"
+            placeholder="skool or instagram"
           />
         </Field>
         <Field label="Daily content drafts" htmlFor="dailyContent">
@@ -273,6 +275,23 @@ export function ProjectForm({
         </Field>
       </div>
 
+      <Field label="Instagram business account id" htmlFor="instagramUserId">
+        <input
+          id="instagramUserId"
+          name="instagramUserId"
+          defaultValue={initial?.instagramUserId}
+          className={fieldClass}
+          placeholder="17841… (Graph API IG user id)"
+        />
+      </Field>
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+        Channel <span className="text-ink">instagram</span> drafts caption +
+        image into the vault. Set this id +{" "}
+        <span className="text-ink">INSTAGRAM_ACCESS_TOKEN</span> +{" "}
+        <span className="text-ink">JARVIS_PUBLIC_URL</span> to enable Approve
+        &amp; publish.
+      </p>
+
       <Field label="Content brief (daily posts)" htmlFor="contentBrief">
         <textarea
           id="contentBrief"
@@ -280,7 +299,7 @@ export function ProjectForm({
           rows={4}
           defaultValue={initial?.contentBrief}
           className={fieldClass}
-          placeholder="Voice, audience, CTA rules for daily Skool / channel drafts."
+          placeholder="Voice, audience, CTA rules for daily Skool / Instagram drafts."
         />
       </Field>
 

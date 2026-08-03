@@ -67,7 +67,7 @@ Per-lane `trustLevel` on projects (default **operator**). Promote on the project
 1. **Observer** — reads repos, summarizes, answers questions (mutating tools blocked)
 2. **Drafter** — creates drafts (jobs, vault notes, email drafts) without publishing; Cloud Agents do not auto-open PRs and finish as Needs you; cannot send email replies
 3. **Operator** — can open PRs, create issues, send approved messages (current default approve gate)
-4. **Autopilot** — like operator; narrow auto-finish for safe non-email code successes (no Skool auto-publish, no auto-merge)
+4. **Autopilot** — like operator; narrow auto-finish for safe non-email code successes (no Instagram/Skool auto-publish, no auto-merge)
 
 Enforcement lives in `apps/web/lib/trust/policy.ts` and is applied in chat tools, the job runner, email ingest, daily content, and Approve & reply.
 
